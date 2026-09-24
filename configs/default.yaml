@@ -10,8 +10,8 @@
 seed: 42
 
 dataset:
-  # path: "datasets/raw/default.csv"
-  path: "datasets/raw/default.dat"
+  path: "datasets/raw/default.csv"
+  # path: "datasets/raw/default.dat"
 
   # path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).csv"
   # path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).dat"
