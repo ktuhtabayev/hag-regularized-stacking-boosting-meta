@@ -1,0 +1,185 @@
+# ============================================================
+# Default reproducible config (used by scripts + future GUI)
+# ============================================================
+# This file is intentionally "self-documenting":
+# - shows every supported majorizing function
+# - includes readable math (Unicode) + parameter meaning
+# - includes ready-to-copy snippets for switching functions
+# ============================================================
+
+seed: 42
+
+dataset:
+  # path: "datasets/raw/default.csv"
+  # path: "datasets/raw/default.dat"
+
+  # path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).csv"
+  # path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).dat"
+
+  path: "datasets/raw/Cancer/Cancer (589, 44, 2).csv"
+  # path: "datasets/raw/Cancer/Cancer (589, 44, 2).dat"
+  
+  # path: "datasets/raw/DDos/DDos (10000, 80, 2).csv"
+  # path: "datasets/raw/DDos/DDos (10000, 80, 2).dat"
+  
+  # Supported:
+  #   - csv_extended
+  #   - csv_simple
+  #   - dat_matrix
+  format: csv_extended
+  
+  delimiter: ","
+  has_metadata_header: true
+  has_feature_type_row: true
+  label_col: -1
+  label_mapping:
+    "1": 1
+    "2": 2
+
+hag:
+  alpha: 0.3
+  delta: 0.1
+  kappa: 15
+  cr1: 10.0
+  k1_label: 1
+  k2_label: 2
+
+  # ==========================================================
+  # Majorizing function f(x) (config-driven)
+  # ==========================================================
+  #
+  # ACTIVE SETTING (change only this block)
+  # majorizing:
+  #   name: "identity"
+  #   params: {}
+
+  # ==========================================================
+  # Majorizing functions reference (readable math + snippets)
+  # ==========================================================
+  #
+  # 1) identity
+  #
+  # Simple "do nothing" function.
+  #
+  # Recommended formula:
+  #   f(x) = x
+  #
+  # Params: none
+  #
+  # Snippet:
+  # majorizing:
+  #   name: "identity"
+  #   params: {}
+  
+
+  # ----------------------------------------------------------
+  # 2) sigmoid
+  #
+  # Smooth S-curve, bounded in (0,1).
+  #
+  # Recommended formula (simple & stable):
+  #
+  #   f(x) = 1 / (1 + e^(−k(x − x0)))
+  #
+  # Params:
+  #   k  (float): slope/steepness (bigger ⇒ steeper)
+  #   x0 (float): center (shift)
+  #
+  # Snippet:
+  majorizing:
+    name: "sigmoid"
+    params:
+      k: 1.0
+      x0: 0.0
+  #
+
+  # ----------------------------------------------------------
+  # 3) logistic
+  #
+  # Same functional family as sigmoid (kept as its own name for GUI clarity).
+  #
+  # Recommended formula:
+  #
+  #   f(x) = 1 / (1 + e^(−k(x − x0)))
+  #
+  # Params:
+  #   k  (float): slope/steepness
+  #   x0 (float): center (shift)
+  #
+  # Snippet:
+  # majorizing:
+  #   name: "logistic"
+  #   params:
+  #     k: 2.0
+  #     x0: 0.0
+  #
+
+  # ----------------------------------------------------------
+  # 4) exponential
+  #
+  # This is usually used as a smooth monotonic curve.
+  #
+  # Recommended formula (simple & stable):
+  #
+  #   f(x) = scale · e^(k(x − x0))
+  #
+  # Params:
+  #   k     (float): growth rate
+  #   x0    (float): shift
+  #   scale (float): multiplier
+  #
+  # Snippet:
+  # majorizing:
+  #   name: "exponential"
+  #   params:
+  #     k: 1.0
+  #     x0: 0.0
+  #     scale: 1.0
+  #
+
+  # ----------------------------------------------------------
+  # 5) quadratic
+  #
+  # Can be convex/concave depending on a. Not bounded.
+  #
+  # Recommended formula:
+  #
+  #   f(x) = a·x² + b·x + c
+  #
+  # Params:
+  #   a (float): quadratic coefficient
+  #   b (float): linear coefficient
+  #   c (float): constant term
+  #
+  # Snippet:
+  # majorizing:
+  #   name: "quadratic"
+  #   params:
+  #     a: 1.0
+  #     b: 0.0
+  #     c: 0.0
+  #
+
+  # ----------------------------------------------------------
+  # 6) piecewise_linear
+  #
+  # Linear interpolation through user-defined breakpoints.
+  #
+  # Recommended form:
+  #   Provide points (x[i], y[i]) and interpolate.
+  #
+  # Params:
+  #   x (list[float]): strictly increasing breakpoints
+  #   y (list[float]): same length as x
+  #
+  # Snippet:
+  # majorizing:
+  #   name: "piecewise_linear"
+  #   params:
+  #     x: [-10.0, -1.0, 0.0, 1.0, 10.0]
+  #     y: [  0.0,  0.2, 0.5, 0.8,  1.0]
+  #
+
+output:
+  root_dir: "outputs"
+  runs_dir: "runs"

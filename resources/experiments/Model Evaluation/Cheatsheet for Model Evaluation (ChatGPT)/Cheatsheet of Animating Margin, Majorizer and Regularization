@@ -1,0 +1,7 @@
+I wanna see the power of Majorizer (sigmoid) and Regularizer (alfa=0.3) in action with the help of animation.
+To make a margin bigger in each step of the algorithm, how Majorizer and Regularization penalizing objects in wrong class by pushing them to their own class.
+We will take a look at these action in additional features dataset obtained from hag (1-algorithm).
+Here is additional features dataset csv file, and margin_report.csv file for each additional features case, 
+and also in case you need, each individual additional feature whole objects actual and predicted classes, and their margin values given.
+Take a look at these calculations and make animations based these values to show how Majorizer and Regularizer working to make margin 
+and their interaction with misclassified objects and penalizing, pushing them towards their true class.

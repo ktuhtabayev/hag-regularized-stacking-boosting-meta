@@ -1,0 +1,45 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ===== Virtual Environments =====
+.venv/
+venv/
+env/
+ENV/
+myEnv/
+
+# ===== IDE / Editor =====
+.vscode/
+.idea/
+*.swp
+
+# ===== OS files =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ===== Logs / Outputs =====
+outputs/
+*.log
+
+# ===== Data (optional) =====
+# If datasets are large/private, ignore raw data
+# datasets/raw/
+
+# ===== Jupyter (optional) =====
+.ipynb_checkpoints/
+
+# ===== Local config (optional) =====
+configs/gui_last_used.yaml

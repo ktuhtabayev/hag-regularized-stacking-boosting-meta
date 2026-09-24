@@ -1,0 +1,16 @@
+Since META algorithm's job is classifying a new object, 
+it's time for forming a new object with random values, after forming the training dataset. 
+
+Important!!! Take into account everything that forming a new object is so crucial, we will add it to GUI, etc.
+Organize it from now onward, creating specific, seperate .py file to form and run it, 
+and then for later use cases call it, for example, for GUI, so on.
+
+Here is a brief structure how to form it:
+We have TUPLAM={2,5,12,3,8} from HAG algorithm.    
+Just we did in our previous attempt to form training dataset Si=(ai0, ..., aip, di1, ..., dip), 
+but now we need only Snew=(ai0, ..., aip) part, without second (latent) additional features part.
+If you remember initial dataset structure and its values (nominal and quantitative), make exactly the same style (format) as its.
+For nominal features initial and binary formats are the same, but for quantitative features would be the same as we did in training dataset for META algorithm.
+Create random values for each feature.
+Form both (initial and binary format) for new object, and write both format.
+Label them like Snew=(a0, ..., ap).

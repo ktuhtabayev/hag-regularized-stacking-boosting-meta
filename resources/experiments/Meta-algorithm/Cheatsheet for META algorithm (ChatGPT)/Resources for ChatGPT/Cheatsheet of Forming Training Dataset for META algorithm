@@ -1,0 +1,26 @@
+Let's start to code for META algorithm.
+We formed 'TUPLAM' ('SET'={3,6,13,4,9} in excel experiments, 1-based index, 
+in your source code must be 0-based) and additional features for HAG algorithm.
+So, based on these results we will form training dataset for META algorithm.
+Here is how to form the training dataset (Si=(ai0, ..., aip, di1, ..., dip)): 
+As shown in the two pictures above, the first table is formed in the order of SET features indeces ('SET'={3,6,13,4,9}), 
+not with contribution values of each feature, but with initial dataset's the same features' indeces values.
+In the first dataset table, if there are quantitative features (sign of quantitative features is 1) in the SET (for example, E column (blue) is a quantitative feature), 
+take a binary values of those features (we formed quantitative_binary.csv file for this) in the project.
+For nominal features, take just initial values (sign of nominal features is 0).
+Label them like shown in the first table titles (starting ai0, till the aip)
+
+In the second dataset picture shown above is additional features dataset. 
+To form this, just take r1, r2, r3, r4, r5 values (label them like shown in the second table titles, 
+starting i1, till the p, like di1, di2, di3, di4 and so on for later usage in META algorithm).
+
+After forming two tables, merge them next to each other in this format the same as in the article Si=(ai0, ..., aip, di1, ..., dip) to form training dataset for META algorithm.
+Add classes column at the end of the training dataset shown in picture just like initial dataset classes column.
+
+Let's call this whole process 'preparation for META algorithm'.
+
+Remind you that take into account everything like before in the future development of the preject (GUI, loading different datasets, and so on.)
+
+Provide every your source code ready to copy-paste form.
+
+Do those mentioned above for now, then I will tell you what to do next. 

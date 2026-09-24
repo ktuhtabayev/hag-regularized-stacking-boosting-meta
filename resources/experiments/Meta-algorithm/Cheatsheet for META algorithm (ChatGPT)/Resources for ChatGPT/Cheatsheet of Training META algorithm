@@ -1,0 +1,84 @@
+Important!!! Target in this META algorithm is classifying a new object class. 
+In your source code all files must be 0-based indices.
+So we have up until now training dataset (Si=(ai0, ..., aip, di1, ..., dip)) 
+and a new object with binary values (Snew=(a0, ..., ap)) to start training META algorithm.
+Step 1 (j=0).
+In step 1 of classifying the new object with META algorithm (written in the article as well),
+and also shown in the first picture above.
+In this step of the algorithm, we have to form B1(a0) and B2(a0) sets for K1 and K2 classes respectively.
+How to build both sets in this step, I will explain step by step below:
+Take the first features from both training dataset and the new object 
+(in our case, ai0(x3) from training dataset and a0(x3) from the new object).
+In the picture above, training dataset sorted based on its classes (Class 1 (B30:B33) is above the bold line, Class 2 (B34:B39) is below.)
+All objects from this first feature of the sorted training dataset which are equal to the value of the first feature of the new object (a0(x3)=4) are selected 
+(E32:E33 for Class 1 and E34:E39 for Class 2) and formed B1(a0)={S4, S6} and B2(a0)={S1, S8, S9, S10}. That's it for Step 1.
+
+***************************************************
+
+Step 2 (start from j=1).
+From this step, we start looking at from the second feature onward from both training dataset (ai1(x6)) and the new object (a1(x6)).
+Slightly different trend in this step from the Step 1 that we have to look at among the candidates of the Step 1 results: B1(a0)={S4, S6} and B2(a0)={S1, S8, S9, S10}.
+The result of the first loop of this Step is the same: B1(a0)={S4, S6} and B2(a0)={S1, S8, S9, S10}.
+After this check Step 3 condition.
+If the condition is True, go back to Step 2 again.
+
+j=2:
+So now we have to look at previous result of among the candidates of the Step 2 results final result: B1(a0)={S4, S6} and B2(a0)={S1, S8, S9, S10}
+The result at this point of this Step is: B1(a0)={S4, S6} and B2(a0)={S8, S9, S10}.
+After this check Step 3 condition.
+If the condition is True, go back to Step 2 again.
+
+j=3:
+So now we have to look at previous result of among the candidates of the Step 2 results final result: B1(a0)={S4, S6} and B2(a0)={S8, S9, S10}.
+The result at this point of this Step is: B1(a0)={S6} and B2(a0)={S9, S10}.
+After this check Step 3 condition.
+If the condition is True, go back to Step 2 again.
+
+j=4:
+So now we have to look at previous result of among the candidates of the Step 2 results final result: B1(a0)={S6} and B2(a0)={S9, S10}
+The result at this point of this Step is the same as previous one: B1(a0)={S6} and B2(a0)={S9, S10}.
+After this check Step 3 condition.
+If the condition is False, go to Step 4.
+
+In excel experiment shown in the second picture above, all objects are selected if the two conditions are satisfied at the same time: 
+B1(a1)={Si∈B1(a0)|a1=ai1, di1>0} for Class 1, B2(a1)={Si∈B2(a0)|a1=ai1, di1>0} for Class 2.
+di1 is the first feature from the additional features dataset (di1(r1), di2(r2), di3(r3), di4(r4)).
+
+Step 2 keeps continue until the Step 3 condition is False.
+***************************************************
+
+Step 3.
+Checking the condition.
+If j<p, here is j set to 0 in Step 1 (j=0), and from Step 2 it will increase to 1 (j=j+1).
+Shown in the third picture as well.
+
+***************************************************
+
+Step 4.
+When the Step 3 condition is False, Step 4 starts (4th picture).
+As you can see the Step 4 in the last picture and the article above, it's classifying the new object step.
+Deeply analyze both picture and article and make source code for all the steps above by taking into account everything in the future.  
+
+
+
+
+
+
+
+
+
+--------- Optimizing META algorithm ----------
+
+That's it. I'm done. Deeply sorry, accept my apoligize for being rude.
+Mistake was in my excel experiment with quantitative feature in the training dataset gained from HAG algorithm. 
+Your source code was correct.
+But we have to develop our corrent source code with minor improvements. 
+I provide current .py files above in my current project. 
+I will explain below step by step what to do next:
+
+
+
+
+
+
+
