@@ -39,16 +39,18 @@ class DatasetConfig:
       - GUI later can choose any file path and build DatasetConfig dynamically.
 
     Default behavior:
-      - If format=None, we auto-detect.
+      - If format=None or "auto", we auto-detect from the file extension.
       - CSV is default input type.
-      - Supports your EXTENDED CSV layout:
+      - Supports your EXTENDED layout (same for .csv and .dat):
           row 1:  m,n,c metadata (e.g., 270,13,2)
           rows 2..m+1: n features + label
           last row: n flags (1 quantitative, 0 nominal)
+      - .dat files are whitespace-separated (spaces or tabs, decimal point or comma);
+        `delimiter` applies to CSV formats only.
     """
     path: str
-    format: Optional[str] = None               # e.g., "csv_extended", "csv_simple", "dat_matrix", "xlsx", "txt_space"
-    delimiter: str = ","
+    format: Optional[str] = None               # None/"auto", "csv_extended", "csv_simple", "dat_matrix", "xlsx", "txt_space"
+    delimiter: str = ","                       # CSV only
     has_metadata_header: bool = True           # extended CSV
     has_feature_type_row: bool = True          # extended CSV
     label_col: int = -1                        # -1 means last column
@@ -122,7 +124,10 @@ def load_dataset_bundle(cfg: DatasetConfig) -> LoadedDataset:
         raise DatasetLoadError(f"Dataset file not found: {path.resolve()}")
 
     # 1) Decide format
-    fmt = (cfg.format or detect_format(path, cfg)).lower()
+    fmt = (cfg.format or "auto").lower()
+    if fmt == "auto":
+        fmt = detect_format(path, cfg)
+    _check_format_matches_suffix(fmt, path)
 
     # 2) Dispatch
     loader = _REGISTRY.get(fmt)
@@ -137,7 +142,7 @@ def detect_format(path: Path, cfg: DatasetConfig) -> str:
     """
     Detection rules (CSV default):
       - If suffix is .csv -> decide between csv_extended vs csv_simple by reading first row
-      - If suffix is .dat -> dat_matrix (future)
+      - If suffix is .dat -> dat_matrix (whitespace-separated; honors has_metadata_header/has_feature_type_row)
       - If suffix is .xlsx -> xlsx (future)
       - If suffix is .txt -> txt_space (future)
       - Else -> csv_extended fallback (because you want CSV default)
@@ -149,7 +154,7 @@ def detect_format(path: Path, cfg: DatasetConfig) -> str:
         return "csv_extended" if looks_like_csv_extended(path, cfg.delimiter) else "csv_simple"
 
     if suffix == ".dat":
-        return "dat_matrix"  # placeholder
+        return "dat_matrix"
 
     if suffix in (".xlsx", ".xls"):
         return "xlsx"        # placeholder
@@ -159,6 +164,19 @@ def detect_format(path: Path, cfg: DatasetConfig) -> str:
 
     # fallback to CSV default behavior
     return "csv_extended"
+
+
+def _check_format_matches_suffix(fmt: str, path: Path) -> None:
+    """
+    Catch the easy mistake of switching cfg.path between .csv and .dat
+    while leaving an explicit format for the other file type.
+    """
+    suffix = path.suffix.lower()
+    if (fmt.startswith("csv_") and suffix == ".dat") or (fmt == "dat_matrix" and suffix == ".csv"):
+        raise DatasetLoadError(
+            f"Dataset format '{fmt}' cannot read a '{suffix}' file: {path}. "
+            "Set format to 'auto' (detect from the file extension) or to the matching format."
+        )
 
 
 def looks_like_csv_extended(path: Path, delimiter: str = ",") -> bool:
@@ -211,9 +229,12 @@ def load_csv_extended_cfg(cfg: DatasetConfig) -> LoadedDataset:
 
 
 def load_dat_matrix_cfg(cfg: DatasetConfig) -> LoadedDataset:
-    raise DatasetLoadError(
-        "Format 'dat_matrix' is registered but not implemented yet. "
-        "Add io/formats/dat_matrix.py later."
+    return load_dat_matrix(
+        path=Path(cfg.path),
+        has_metadata_header=cfg.has_metadata_header,
+        has_feature_type_row=cfg.has_feature_type_row,
+        label_col=cfg.label_col,
+        label_mapping=_coerce_label_mapping(cfg.label_mapping),
     )
 
 
@@ -234,9 +255,9 @@ def load_txt_space_cfg(cfg: DatasetConfig) -> LoadedDataset:
 # Register built-ins (CSV default is active immediately)
 _REGISTRY.register("csv_simple", load_csv_simple_cfg)
 _REGISTRY.register("csv_extended", load_csv_extended_cfg)
+_REGISTRY.register("dat_matrix", load_dat_matrix_cfg)
 
 # Future placeholders already registered so GUI can show them:
-_REGISTRY.register("dat_matrix", load_dat_matrix_cfg)
 _REGISTRY.register("xlsx", load_xlsx_cfg)
 _REGISTRY.register("txt_space", load_txt_space_cfg)
 
@@ -287,6 +308,60 @@ def load_csv_extended(
     if not rows:
         raise DatasetLoadError(f"Empty CSV: {path}")
 
+    return _parse_extended_rows(
+        rows,
+        has_metadata_header=has_metadata_header,
+        has_feature_type_row=has_feature_type_row,
+        label_col=label_col,
+        label_mapping=label_mapping,
+    )
+
+
+# =========================
+# Core DAT implementation
+# =========================
+
+def load_dat_matrix(
+    path: Path,
+    has_metadata_header: bool = True,
+    has_feature_type_row: bool = True,
+    label_col: int = -1,
+    label_mapping: Optional[Dict[Union[str, int], int]] = None,
+) -> LoadedDataset:
+    """
+    DAT matrix: same layout as extended CSV, but whitespace-separated:
+      row 1: m n c
+      rows: m data rows (n features + label)
+      last row: n flags (1 quantitative, 0 nominal)
+
+    Accepts spaces or tabs (runs of them count as one separator, padding is ignored)
+    and decimal commas (e.g. "-0,91" as written by some locales).
+    """
+    rows = read_dat_rows(path)
+    if not rows:
+        raise DatasetLoadError(f"Empty DAT: {path}")
+
+    return _parse_extended_rows(
+        rows,
+        has_metadata_header=has_metadata_header,
+        has_feature_type_row=has_feature_type_row,
+        label_col=label_col,
+        label_mapping=label_mapping,
+    )
+
+
+# =========================
+# Shared layout parser (CSV + DAT)
+# =========================
+
+def _parse_extended_rows(
+    rows: List[List[str]],
+    has_metadata_header: bool,
+    has_feature_type_row: bool,
+    label_col: int,
+    label_mapping: Optional[Dict[Union[str, int], int]],
+) -> LoadedDataset:
+    """Tokenized rows (header?, data rows, feature-type row?) -> LoadedDataset."""
     meta: Dict[str, int] = {}
     start_idx = 0
 
@@ -417,6 +492,26 @@ def _read_csv_rows(path: Path, delimiter: str) -> List[List[str]]:
     return rows
 
 
+def read_dat_rows(path: Path) -> List[List[str]]:
+    """Whitespace-tokenized non-empty lines of a .dat file (decimal commas -> points)."""
+    rows: List[List[str]] = []
+    try:
+        # utf-8-sig: tolerate a BOM written by Windows editors
+        with path.open("r", encoding="utf-8-sig") as f:
+            for line in f:
+                tokens = line.split()
+                if tokens:
+                    rows.append([_dat_token(t) for t in tokens])
+    except Exception as e:
+        raise DatasetLoadError(f"Failed reading DAT: {path}") from e
+    return rows
+
+
+def _dat_token(token: str) -> str:
+    # Decimal comma ("-0,91") -> decimal point; anything else is left for float() to judge
+    return token.replace(",", ".") if token.count(",") == 1 and "." not in token else token
+
+
 def _rows_to_float_matrix(rows: List[List[str]]) -> np.ndarray:
     cleaned = [[str(x).strip() for x in row] for row in rows]
     width = max(len(r) for r in cleaned)
@@ -434,6 +529,13 @@ def _rows_to_float_matrix(rows: List[List[str]]) -> np.ndarray:
             numeric_rows.append([float(x) for x in r])
         except Exception as e:
             raise DatasetLoadError(f"Non-numeric value in data row: {r}") from e
+
+    expected = len(numeric_rows[0])
+    for i, r in enumerate(numeric_rows, start=1):
+        if len(r) != expected:
+            raise DatasetLoadError(
+                f"Data row {i} has {len(r)} values, but data row 1 has {expected} (missing or extra value?)."
+            )
 
     return np.array(numeric_rows, dtype=float)
 

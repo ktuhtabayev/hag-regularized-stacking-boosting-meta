@@ -11,24 +11,26 @@ seed: 42
 
 dataset:
   # path: "datasets/raw/default.csv"
-  # path: "datasets/raw/default.dat"
+  path: "datasets/raw/default.dat"
 
   # path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).csv"
   # path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).dat"
 
-  path: "datasets/raw/Cancer/Cancer (589, 44, 2).csv"
+  # path: "datasets/raw/Cancer/Cancer (589, 44, 2).csv"
   # path: "datasets/raw/Cancer/Cancer (589, 44, 2).dat"
   
   # path: "datasets/raw/DDos/DDos (10000, 80, 2).csv"
   # path: "datasets/raw/DDos/DDos (10000, 80, 2).dat"
   
   # Supported:
+  #   - auto          (pick from the file extension: .csv -> csv_extended/csv_simple, .dat -> dat_matrix)
   #   - csv_extended
   #   - csv_simple
-  #   - dat_matrix
-  format: csv_extended
-  
-  delimiter: ","
+  #   - dat_matrix    (whitespace-separated: spaces or tabs, decimal point or comma)
+  # Keep "auto" so switching `path` between .csv and .dat needs no other change.
+  format: auto
+
+  delimiter: ","    # CSV only; .dat files are always whitespace-separated
   has_metadata_header: true
   has_feature_type_row: true
   label_col: -1
