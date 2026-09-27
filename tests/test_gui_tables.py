@@ -17,6 +17,7 @@ from hag_regularized_stacking_boosting_meta.gui.app import (  # noqa: E402
     MainWindow,
     frame_to_table,
     parse_majorizer_params,
+    run_output_dir,
 )
 from hag_regularized_stacking_boosting_meta.gui.plots import (  # noqa: E402
     draw_criterion_history,
@@ -156,7 +157,7 @@ def test_dataset_preset_dropdown_fills_path_and_tracks_custom_edits(app) -> None
 
 def test_organizer_shows_the_last_run_and_clears_for_another_dataset(app, default_result) -> None:
     window = MainWindow(ROOT, restore_settings=False)
-    window._on_pipeline_finished((default_result, None))
+    window._on_pipeline_finished(default_result)
     assert window.organizer.text() == f"x{default_result.hag.organizer}" == "x2"
 
     preset_names = [window.dataset_preset.itemText(i) for i in range(window.dataset_preset.count())]
@@ -165,9 +166,18 @@ def test_organizer_shows_the_last_run_and_clears_for_another_dataset(app, defaul
     window._on_dataset_preset_selected(preset_names.index("cancer_nominal_dat"))
     assert window.organizer.text() == ""
 
-    window._on_pipeline_finished((default_result, None))
+    window._on_pipeline_finished(default_result)
     window._on_dataset_path_edited("")
     assert window.organizer.text() == ""
+
+
+def test_a_finished_run_writes_nothing_until_export(app, default_result) -> None:
+    window = MainWindow(ROOT, restore_settings=False)
+    window._on_pipeline_finished(default_result)
+    assert window.last_output_dir is None
+    assert not window.open_output_button.isEnabled()
+    assert "Output folder: Not exported" in window.status_text.toPlainText()
+    assert not run_output_dir(default_result, ROOT).exists()
 
 
 def test_organizer_is_the_leftmost_parameter_and_follows_every_run(app, default_result) -> None:
@@ -178,13 +188,13 @@ def test_organizer_is_the_leftmost_parameter_and_follows_every_run(app, default_
     assert row.itemAt(3).widget() is window.alpha
 
     # same dataset, new hyperparameters: the box shows the organizer of the new run
-    window._on_pipeline_finished((default_result, None))
+    window._on_pipeline_finished(default_result)
     window.alpha.setValue(1.0)
     window.kappa.setValue(5)
     window.majorizer.setCurrentText("identity")
     window._on_majorizer_selected(window.majorizer.currentIndex())
     rerun = run_pipeline(window._config_from_controls(), project_root=ROOT)
-    window._on_pipeline_finished((rerun, None))
+    window._on_pipeline_finished(rerun)
     assert window.organizer.text() == f"x{rerun.hag.organizer}"
 
 

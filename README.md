@@ -169,8 +169,9 @@ code), so the ids in the B1/B2 sets match the table rows.
 
 Every output is written under `outputs/runs/` (ignored by git).
 
-A GUI run writes `outputs/runs/gui/<run_id>/`; Export rewrites the same folder with
-the currently shown `Snew`:
+A GUI run only computes and shows results; nothing is written until you press Export,
+which writes `outputs/runs/gui/<run_id>/` with the currently shown `Snew` (pressing it
+again rewrites the same folder). Saving a plot puts the PNG in that folder's `figures/`:
 
 ```text
 run_info.json            parameters, TUPLAM, θ/γ history, Snew and its class

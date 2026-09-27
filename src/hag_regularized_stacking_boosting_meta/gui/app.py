@@ -27,7 +27,7 @@ from hag_regularized_stacking_boosting_meta.io.configs import (
     load_dataset_catalog,
     load_default_config,
 )
-from hag_regularized_stacking_boosting_meta.io.writers import write_pipeline_outputs
+from hag_regularized_stacking_boosting_meta.io.writers import GUI_RUNS_TASK, write_pipeline_outputs
 from hag_regularized_stacking_boosting_meta.services import report_builder as rb
 from hag_regularized_stacking_boosting_meta.services.runner import (
     NewObjectClassification,
@@ -253,7 +253,7 @@ class PipelineWorker(QThread):
     """Run the full pipeline off the GUI thread so the window stays responsive."""
 
     stage_changed = pyqtSignal(str)
-    finished_ok = pyqtSignal(object)  # (PipelineResult, output folder)
+    finished_ok = pyqtSignal(object)  # PipelineResult; nothing is written until Export
     failed = pyqtSignal(str)
 
     def __init__(self, config: RunConfig, project_root: Path, parent=None) -> None:
@@ -268,16 +268,19 @@ class PipelineWorker(QThread):
                 project_root=self._project_root,
                 on_stage=self.stage_changed.emit,
             )
-            self.stage_changed.emit("Writing outputs")
-            output_dir = write_pipeline_outputs(result, runs_root(self._config, self._project_root))
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")
         else:
-            self.finished_ok.emit((result, output_dir))
+            self.finished_ok.emit(result)
 
 
 def runs_root(config: RunConfig, project_root: Path) -> Path:
     return Path(project_root) / config.output.root_dir / config.output.runs_dir
+
+
+def run_output_dir(result: PipelineResult, project_root: Path) -> Path:
+    """The folder Export writes this run to (and where saved plots go)."""
+    return runs_root(result.config, project_root) / GUI_RUNS_TASK / result.run_id
 
 
 class MainWindow(QMainWindow):
@@ -560,14 +563,13 @@ class MainWindow(QMainWindow):
     def _on_stage_changed(self, stage: str) -> None:
         self.status_text.setPlainText(f"Running: {stage}...")
 
-    def _on_pipeline_finished(self, payload: tuple[PipelineResult, Path]) -> None:
-        result, output_dir = payload
+    def _on_pipeline_finished(self, result: PipelineResult) -> None:
         self.last_result = result
-        self.last_output_dir = output_dir
+        self.last_output_dir = None
         self.organizer.setText(f"x{result.hag.organizer}")
         self.populate_tabs(result)
-        self.open_output_button.setEnabled(True)
-        self.status_text.setPlainText(self._status_summary(result, output_dir))
+        self.open_output_button.setEnabled(False)
+        self.status_text.setPlainText(self._status_summary(result, None))
 
     def _on_pipeline_failed(self, message: str) -> None:
         QMessageBox.critical(self, "Run failed", message)
@@ -594,7 +596,7 @@ class MainWindow(QMainWindow):
 
     def open_output_folder(self) -> None:
         if self.last_output_dir is None:
-            QMessageBox.information(self, "No output folder", "Run or export first.")
+            QMessageBox.information(self, "No output folder", "Export first.")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_output_dir)))
 
@@ -603,13 +605,16 @@ class MainWindow(QMainWindow):
         if figure is None:
             QMessageBox.information(self, "No plot", "This plot is not available.")
             return
-        if self.last_output_dir is None:
-            QMessageBox.information(self, "No output folder", "Run or export first.")
+        if self.last_result is None:
+            QMessageBox.information(self, "No plot", "Run the pipeline first.")
             return
+        self.last_output_dir = run_output_dir(self.last_result, self.project_root)
         target_dir = self.last_output_dir / "figures"
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / file_name
         figure.savefig(target_path, dpi=160, bbox_inches="tight")
+        self.open_output_button.setEnabled(True)
+        self._refresh_status()
         QMessageBox.information(self, "Plot saved", str(target_path))
 
     # ------------------------------------------------------------------
