@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -43,6 +43,7 @@ def _build_quant_binary_map(
     X: np.ndarray,
     y: np.ndarray,
     quantitative_idx: Sequence[int],
+    quantitative_result: Optional[Any] = None,
 ) -> Dict[int, np.ndarray]:
     """
     Builds a dict:
@@ -52,7 +53,9 @@ def _build_quant_binary_map(
     if not quantitative_idx:
         return {}
 
-    q_res = build_quantitative_nominalization(X, y, list(quantitative_idx))
+    q_res = quantitative_result
+    if q_res is None:
+        q_res = build_quantitative_nominalization(X, y, list(quantitative_idx))
 
     qmap: Dict[int, np.ndarray] = {}
     for j, fidx in enumerate(q_res.quantitative_idx):
@@ -67,6 +70,7 @@ def prepare_meta_training_dataset(
     feature_types: np.ndarray,
     tuplam: Sequence[int],
     dij: np.ndarray,
+    quantitative_result: Optional[Any] = None,
 ) -> MetaPrepResult:
     """
     PREPARATION FOR META ALGORITHM (Excel-faithful data, but CODE-STYLE HEADERS):
@@ -88,6 +92,9 @@ def prepare_meta_training_dataset(
           ai0(x2), ai1(x5), ...  where x<index> is 0-based (NO +1)
           di1(r1), di2(r2), ...
           Class
+
+    quantitative_result: optional precomputed build_quantitative_nominalization
+    output for all quantitative features of X (avoids recomputing it).
     """
     X = np.asarray(X, dtype=float)
     y = np.asarray(y, dtype=int).reshape(-1)
@@ -109,7 +116,7 @@ def prepare_meta_training_dataset(
             raise ValueError(f"tuplam index out of range: {idx} for n={n}")
 
     quantitative_idx = [i for i in range(n) if feature_types[i] == 1]
-    qmap = _build_quant_binary_map(X, y, quantitative_idx)
+    qmap = _build_quant_binary_map(X, y, quantitative_idx, quantitative_result)
 
     # ---- Build A (ai0..aip) in tuplam order ----
     A_cols: List[np.ndarray] = []

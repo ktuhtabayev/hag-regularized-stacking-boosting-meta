@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .margin import (
+from .margin_analysis import (
     Margin1DResult,
     margin_analysis_1d,
     margin_analysis_latent_matrix,

@@ -10,7 +10,7 @@ import numpy as np
 
 from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
 from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
-from hag_regularized_stacking_boosting_meta.algorithms.hag.prep import prepare_hag_inputs
+from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
 
 
 def _make_run_id() -> str:
@@ -71,7 +71,7 @@ def main() -> None:
         print("Check your dataset feature-sign row:")
         print("  - quantitative feature  -> 1")
         print("  - nominal feature       -> 0")
-        print("No output files were created for hag_prep_demo.")
+        print("No output files were created for run_hag_prep.py.")
         return
 
     prep = prepare_hag_inputs(

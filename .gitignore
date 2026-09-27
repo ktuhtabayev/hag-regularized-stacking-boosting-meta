@@ -1,45 +1,97 @@
-# ===== Python =====
+# =========================
+# Python
+# =========================
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 *.so
+*.dylib
+*.dll
+*.egg
 *.egg-info/
-dist/
+.eggs/
 build/
+dist/
+site/
 pip-wheel-metadata/
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/
 
-# ===== Virtual Environments =====
+# =========================
+# Testing / coverage
+# =========================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+
+# =========================
+# Virtual environments
+# =========================
 .venv/
 venv/
 env/
 ENV/
 myEnv/
 
-# ===== IDE / Editor =====
+# =========================
+# Jupyter / notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# IDE / Editor
+# =========================
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
 
-# ===== OS files =====
+# =========================
+# OS files
+# =========================
 .DS_Store
 Thumbs.db
 Desktop.ini
 
-# ===== Logs / Outputs =====
-outputs/
+# =========================
+# Logs / runtime files
+# =========================
 *.log
+logs/
+outputs/
 
-# ===== Data (optional) =====
-# If datasets are large/private, ignore raw data
+# =========================
+# Temporary / cache files
+# =========================
+*.tmp
+*.temp
+*.bak
+*.orig
+tmp/
+
+# =========================
+# Local configuration
+# =========================
+configs/gui_last_used.yaml
+.env
+.env.*
+*.local
+
+# =========================
+# Optional data ignores
+# Keep datasets tracked by default.
+# Uncomment if raw datasets become large/private.
 # datasets/raw/
 
-# ===== Jupyter (optional) =====
-.ipynb_checkpoints/
-
-# ===== Local config (optional) =====
-configs/gui_last_used.yaml
+# =========================
+# Optional Excel temporary files
+# =========================
+~$*.xlsx
+~$*.xls

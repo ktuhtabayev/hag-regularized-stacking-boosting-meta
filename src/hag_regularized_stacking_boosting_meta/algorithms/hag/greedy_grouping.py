@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Sequence
+from dataclasses import dataclass, field
+from typing import Dict, List, Sequence
 
 import numpy as np
 
 from hag_regularized_stacking_boosting_meta.domain.params import HAGParams
-from .majorizing import get_majorizing_function
-from .selection import choose_next_feature_q
-from .update import update_R
-from .latent import build_dij_from_R_history, LatentBuildResult
+from .majorizing_functions import get_majorizing_function
+from .candidate_selection import choose_next_feature_q
+from .regularization import update_R
+from .latent_features import build_dij_from_R_history, LatentBuildResult
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,9 @@ class HAGResult:
     r_step4_history: List[np.ndarray]
     dij: np.ndarray
     p: int
+    # organizer u (= tuplam[0]) and, per Step-3 iteration, θ/γ of every scanned candidate
+    organizer: int = -1
+    candidate_history: List[Dict[int, float]] = field(default_factory=list)
 
 
 def rank_features_by_weight(weights: Sequence[float]) -> List[int]:
@@ -36,9 +39,13 @@ def greedy_hag_grouping(
     y: np.ndarray,
     weights: Sequence[float],
     params: HAGParams,
+    *,
+    verbose: bool = True,
 ) -> HAGResult:
     """
     Algorithm-1 (Greedy HAG + Regularization + Latent).
+
+    verbose=False silences console output, including the Excel Step-3 column trace.
 
     Excel-faithful rules:
     - Do NOT reorder X columns. Keep original dataset feature order.
@@ -57,7 +64,8 @@ def greedy_hag_grouping(
         raise ValueError("y length must match X rows")
 
     majorizer = get_majorizing_function(params.majorizing)
-    print("MAJOR:", params.majorizing.name, params.majorizing.params)
+    if verbose:
+        print("MAJOR:", params.majorizing.name, params.majorizing.params)
 
     # Organizer selection (ONLY ONCE)
     if params.organizer_index is not None:
@@ -79,6 +87,7 @@ def greedy_hag_grouping(
 
     r_step4_history: List[np.ndarray] = []
     crit_history: List[float] = []
+    candidate_history: List[Dict[int, float]] = []
 
     while True:
         if not P:
@@ -94,12 +103,14 @@ def greedy_hag_grouping(
             k1_label=int(params.k1_label),
             k2_label=int(params.k2_label),
             cr1_init=cr1,
+            debug=None if verbose else False,
         )
         q = int(sel.q)
         crit = float(sel.best_ratio)
 
         # Step 4 commit
         crit_history.append(crit)
+        candidate_history.append(dict(sel.candidate_ratios))
         P.remove(q)
         tuplam.append(q)
 
@@ -132,4 +143,6 @@ def greedy_hag_grouping(
         r_step4_history=r_step4_history,
         dij=latent.dij,
         p=latent.p,
+        organizer=u,
+        candidate_history=candidate_history,
     )

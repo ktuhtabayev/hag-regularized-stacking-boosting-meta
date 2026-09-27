@@ -68,12 +68,12 @@ def main() -> None:
         print("Check your dataset feature-sign row:")
         print("  - nominal feature       -> 0")
         print("  - quantitative feature  -> 1")
-        print("No output files were created for nominal_demo.")
+        print("No output files were created for run_nominal_weights.py.")
         return
 
     res = build_nominal_contributions(ds.X, ds.y, ds.nominal_idx)
 
-    run_name = "nominal_demo"
+    run_name = "nominal_weights"
     run_id = _make_run_id()
     run_dir = _ensure_dir(Path("outputs") / "runs" / run_name / run_id)
 

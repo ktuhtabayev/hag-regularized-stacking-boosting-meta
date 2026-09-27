@@ -10,8 +10,8 @@ This script:
 4) Saves GUI-friendly debug JSON with full B1/B2 history per j
 
 Usage:
-  python scripts/meta_predict_demo.py
-  python scripts/meta_predict_demo.py --reuse-new-object
+  python scripts/run_meta_prediction.py
+  python scripts/run_meta_prediction.py --reuse-new-object
 """
 
 from __future__ import annotations
@@ -187,10 +187,10 @@ def _get_or_create_train_run(
     if latest is not None and _is_valid_train_run(latest):
         return latest
 
-    _run_script(project_root, "train_hag_demo.py", config_path)
+    _run_script(project_root, "run_hag_training.py", config_path)
     latest = _latest_run_dir(train_root)
     if latest is None or not _is_valid_train_run(latest):
-        raise RuntimeError("train_hag_demo.py was executed, but no valid train run was created.")
+        raise RuntimeError("run_hag_training.py was executed, but no valid train run was created.")
     return latest
 
 
@@ -222,10 +222,10 @@ def _get_or_create_meta_prep_run(
         train_root=train_root,
     )
 
-    _run_script(project_root, "meta_prep_demo.py", config_path)
+    _run_script(project_root, "run_meta_prep.py", config_path)
     latest = _latest_run_dir(meta_root)
     if latest is None or not _is_valid_meta_prep_run(latest):
-        raise RuntimeError("meta_prep_demo.py was executed, but no valid meta_prep run was created.")
+        raise RuntimeError("run_meta_prep.py was executed, but no valid meta_prep run was created.")
     return latest
 
 
@@ -242,7 +242,7 @@ def _get_or_create_new_object_run(
     Behavior:
     - If --new-object-run is explicitly provided, use it.
     - Else if --reuse-new-object is provided, reuse the latest valid meta_new_object run.
-    - Otherwise ALWAYS run meta_new_object_demo.py to generate a fresh random Snew,
+    - Otherwise ALWAYS run run_meta_new_object.py to generate a fresh random Snew,
       then take the latest valid meta_new_object run.
     """
     if explicit_run is not None:
@@ -267,11 +267,11 @@ def _get_or_create_new_object_run(
     )
 
     # Create a fresh new object
-    _run_script(project_root, "meta_new_object_demo.py", config_path)
+    _run_script(project_root, "run_meta_new_object.py", config_path)
 
     latest = _latest_run_dir(meta_new_root)
     if latest is None or not _is_valid_new_object_run(latest):
-        raise RuntimeError("meta_new_object_demo.py was executed, but no valid new-object run was created.")
+        raise RuntimeError("run_meta_new_object.py was executed, but no valid new-object run was created.")
     return latest
 
 
@@ -427,7 +427,7 @@ def main() -> None:
     print("artifacts_ref.json:", predict_run_dir / "artifacts_ref.json")
     print("meta_debug.json:", predict_run_dir / "meta_debug.json")
     print("prediction.json:", predict_run_dir / "prediction.json")
-    print("\nReuse the latest S(new) [FLAG]: 'python scripts/meta_predict_demo.py --reuse-new-object'")
+    print("\nReuse the latest S(new) [FLAG]: 'python scripts/run_meta_prediction.py --reuse-new-object'")
 
 
 if __name__ == "__main__":

@@ -52,15 +52,15 @@ def main() -> None:
         print("Check your dataset feature-sign row:")
         print("  - quantitative feature  -> 1")
         print("  - nominal feature       -> 0")
-        print("No output files were created for quantitative_demo.")
+        print("No output files were created for run_quantitative_weights.py.")
         return
 
     # 3) Run quantitative pipeline
     res = build_quantitative_nominalization(ds.X, ds.y, ds.quantitative_idx)
 
     # 4) Prepare run folder EXACTLY as requested:
-    # outputs/runs/quantitative_demo/<run_id>/
-    run_name = "quantitative_demo"
+    # outputs/runs/quantitative_weights/<run_id>/
+    run_name = "quantitative_weights"
     run_id = _make_run_id()
     run_dir = _ensure_dir(Path("outputs") / "runs" / run_name / run_id)
 

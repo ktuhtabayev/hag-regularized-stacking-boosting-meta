@@ -21,7 +21,7 @@ class RunContext:
     """
     A small object that always knows:
       - where the run folder is
-      - what 'task' produced it (quantitative_demo, train, gui, etc.)
+      - what 'task' produced it (quantitative_weights, train, gui, etc.)
       - run_id
     """
     task: str

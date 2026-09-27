@@ -11,7 +11,7 @@ import numpy as np
 
 from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
 from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
-from hag_regularized_stacking_boosting_meta.evaluation.margin import (
+from hag_regularized_stacking_boosting_meta.evaluation.margin_analysis import (
     margin_analysis_latent_matrix,
     build_margin_report_rows,
 )
@@ -61,7 +61,7 @@ def main() -> None:
         train_run_dir = _latest_run_dir(train_root)
 
     if train_run_dir is None or not train_run_dir.exists():
-        raise SystemExit(f"No train runs found at: {train_root}. Run: python scripts/train_hag_demo.py")
+        raise SystemExit(f"No train runs found at: {train_root}. Run: python scripts/run_hag_training.py")
 
     dij_path = train_run_dir / "dij.csv"
     if not dij_path.exists():

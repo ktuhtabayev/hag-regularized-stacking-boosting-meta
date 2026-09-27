@@ -10,7 +10,7 @@ import numpy as np
 
 from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
 from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
-from hag_regularized_stacking_boosting_meta.algorithms.hag.prep import prepare_hag_inputs
+from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
 from hag_regularized_stacking_boosting_meta.algorithms.hag.greedy_grouping import (
     greedy_hag_grouping,
 )

@@ -1,5 +1,5 @@
 # ============================================================
-# Default reproducible config (used by scripts + future GUI)
+# Default reproducible config (used by scripts + GUI)
 # ============================================================
 # This file is intentionally "self-documenting":
 # - shows every supported majorizing function
@@ -45,6 +45,11 @@ hag:
   cr1: 10.0
   k1_label: 1
   k2_label: 2
+
+  # Organizer u (0-based feature index) used for the whole HAG run.
+  # 2 reproduces the Excel experiment (x3 in Excel = index 2 in code).
+  # null = automatic: the feature with the highest weight ω.
+  organizer_index: 2
 
   # ==========================================================
   # Majorizing function f(x) (config-driven)
@@ -185,3 +190,40 @@ hag:
 output:
   root_dir: "outputs"
   runs_dir: "runs"
+
+# ============================================================
+# DATASET CATALOG
+# Presets for the GUI dataset dropdown (and quick switching).
+# Every other dataset setting comes from the `dataset` block above.
+# ============================================================
+dataset_catalog:
+  default_csv:
+    path: "datasets/raw/default.csv"
+  default_dat:
+    path: "datasets/raw/default.dat"
+  heart_disease_10_csv:
+    path: "datasets/raw/Heart-Disease/Heart-Disease (10, 13, 2).csv"
+  heart_disease_10_dat:
+    path: "datasets/raw/Heart-Disease/Heart-Disease (10, 13, 2).dat"
+  heart_disease_270_csv:
+    path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).csv"
+  heart_disease_270_dat:
+    path: "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).dat"
+  cancer_csv:
+    path: "datasets/raw/Cancer/Cancer (589, 44, 2).csv"
+  cancer_dat:
+    path: "datasets/raw/Cancer/Cancer (589, 44, 2).dat"
+  cancer_nominal_dat:
+    path: "datasets/raw/Cancer/Cancer-N (589, 44, 2).dat"
+  ddos_80_csv:
+    path: "datasets/raw/DDos/DDos (10000, 80, 2).csv"
+  ddos_80_dat:
+    path: "datasets/raw/DDos/DDos (10000, 80, 2).dat"
+  ddos_22_dat:
+    path: "datasets/raw/DDos/DDos (10000, 22, 2).dat"
+  ddos_nominal_dat:
+    path: "datasets/raw/DDos/DDos-N (10000, 80, 2).dat"
+  molecular_biology_10_dat:
+    path: "datasets/raw/Molecular-Biology/Molecular-Biology (100, 10, 2).dat"
+  molecular_biology_50_dat:
+    path: "datasets/raw/Molecular-Biology/Molecular-Biology (100, 50, 2).dat"

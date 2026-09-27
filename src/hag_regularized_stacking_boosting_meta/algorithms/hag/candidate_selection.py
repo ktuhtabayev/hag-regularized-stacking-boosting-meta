@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
 
 import numpy as np
 
-from .update import build_bt_candidate, build_bt_candidate_debug
-from .stats import excel_step3_trace_from_bt, excel_ratio_from_bt
-from .majorizing import MajorizingFn
+from .regularization import build_bt_candidate, build_bt_candidate_debug
+from .theta_gamma import excel_step3_trace_from_bt, excel_ratio_from_bt
+from .majorizing_functions import MajorizingFn
 
 
 DEBUG_PRINT_EXCEL_COLUMNS: bool = True
@@ -18,6 +18,8 @@ Majorizer = MajorizingFn  # ndarray -> ndarray
 class SelectionResult:
     q: int
     best_ratio: float
+    # θ/γ ratio (Excel column O) of every scanned candidate, keyed by feature index
+    candidate_ratios: Dict[int, float] = field(default_factory=dict)
 
 
 def _print_vec(name: str, v: np.ndarray, *, prec: int = 10) -> None:
@@ -36,6 +38,7 @@ def choose_next_feature_q(
     k1_label: int,
     k2_label: int,
     cr1_init: float = 10.0,
+    debug: Optional[bool] = None,
 ) -> SelectionResult:
     """
     Step 3 (Excel-faithful):
@@ -43,9 +46,15 @@ def choose_next_feature_q(
       - build bt_final
       - compute ratio using Excel running columns => O = M_last/N_last
       - choose q with minimum ratio (strictly improving over cr1)
+
+    debug=None follows DEBUG_PRINT_EXCEL_COLUMNS; False skips the Excel column printout.
     """
+    if debug is None:
+        debug = DEBUG_PRINT_EXCEL_COLUMNS
+
     best_q: Optional[int] = None
     best_ratio: float = float(cr1_init)
+    candidate_ratios: Dict[int, float] = {}
 
     for fi in P:  # P is already original order in greedy_grouping.py
         bt_final = build_bt_candidate(
@@ -62,8 +71,9 @@ def choose_next_feature_q(
         ratio = excel_ratio_from_bt(
             bt_final, y, k1_label=k1_label, k2_label=k2_label
         )
+        candidate_ratios[int(fi)] = float(ratio)
 
-        if DEBUG_PRINT_EXCEL_COLUMNS:
+        if debug:
             dbg = build_bt_candidate_debug(
                 R,
                 X[:, fi],
@@ -115,4 +125,4 @@ def choose_next_feature_q(
         )
         best_ratio = float(excel_ratio_from_bt(bt_final, y, k1_label=k1_label, k2_label=k2_label))
 
-    return SelectionResult(q=best_q, best_ratio=best_ratio)
+    return SelectionResult(q=best_q, best_ratio=best_ratio, candidate_ratios=candidate_ratios)

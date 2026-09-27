@@ -1,13 +1,13 @@
 [project]
 name = "hag-regularized-stacking-boosting-meta"
 version = "0.1.0"
-description = "HAG-based regularized stacking boosting ensemble with meta-classifier"
+description = "HAG-based regularized stacking boosting ensemble with a META classifier, margin analysis, and a PyQt6 GUI."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 
 authors = [
-  { name = "Kudrat Tuhtabayev", email = "ktuhtabayev@email.com" }
+  { name = "Kudratillo Tuhtabayev", email = "ktuhtabayev@gmail.com" }
 ]
 
 dependencies = [
@@ -29,11 +29,17 @@ dev = [
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]
-# resources/ holds archived code snapshots (ChatGPT cheatsheets), not project code
+# resources/ holds research material (article, Excel experiments), not project code
 extend-exclude = ["resources"]
 
 [tool.ruff.lint]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -59,6 +59,9 @@ def prepare_hag_inputs(
     feature_types: np.ndarray,
     quantitative_idx: Optional[List[int]] = None,
     nominal_idx: Optional[List[int]] = None,
+    *,
+    quantitative_result: Optional[Any] = None,
+    nominal_result: Optional[Any] = None,
 ) -> HAGPrepResult:
     """
     Build:
@@ -70,6 +73,10 @@ def prepare_hag_inputs(
     feature_types convention:
       1 = quantitative
       0 = nominal
+
+    quantitative_result / nominal_result: already computed
+    build_quantitative_nominalization / build_nominal_contributions outputs for the
+    same X, y and indices; passed in to avoid recomputing them.
     """
     X = np.asarray(X)
     y = np.asarray(y).astype(int)
@@ -98,7 +105,9 @@ def prepare_hag_inputs(
     # Quantitative block
     # -------------------------
     if quantitative_idx:
-        qres = build_quantitative_nominalization(X, y, quantitative_idx)
+        qres = quantitative_result
+        if qres is None:
+            qres = build_quantitative_nominalization(X, y, quantitative_idx)
 
         # contribution_X is (m, len(qidx)) in the SAME ORDER as qres.quantitative_idx
         for j, fidx in enumerate(qres.quantitative_idx):
@@ -119,7 +128,9 @@ def prepare_hag_inputs(
                 "or run on a purely-quantitative dataset."
             )
 
-        nres = build_nominal_contributions(X, y, nominal_idx)
+        nres = nominal_result
+        if nres is None:
+            nres = build_nominal_contributions(X, y, nominal_idx)
 
         # contribution_X is (m, len(nidx)) in SAME ORDER as nres.nominal_idx
         for j, fidx in enumerate(nres.nominal_idx):

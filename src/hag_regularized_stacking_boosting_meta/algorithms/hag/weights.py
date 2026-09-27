@@ -4,7 +4,7 @@ algorithms/hag/weights.py  (STABLE FACADE)
 Keep this file stable so the rest of the project (GUI, services, scripts)
 always imports "weights" from ONE place.
 
-- Quantitative weights: weights_quant.py
+- Quantitative weights: weights_quantitative.py
 - Nominal weights:      weights_nominal.py
 """
 
@@ -13,12 +13,12 @@ from __future__ import annotations
 # ============================================================
 # Quantitative exports (CURRENT)
 # We keep a "_QUANT_AVAILABLE" flag for symmetry with nominal,
-# even though weights_quant.py is expected to always exist.
+# even though weights_quantitative.py is expected to always exist.
 # ============================================================
 
 _QUANT_AVAILABLE = False
 try:
-    from .weights_quant import (  # noqa: F401
+    from .weights_quantitative import (  # noqa: F401
         # --- data containers ---
         Criterion1Result,
         GradationCounts,

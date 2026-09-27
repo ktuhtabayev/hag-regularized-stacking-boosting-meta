@@ -77,6 +77,10 @@ def load_default_config(path: str | Path) -> RunConfig:
     # --------------------------
     # HAGParams
     # --------------------------
+    # organizer_index: missing -> dataclass default (Excel organizer), null -> auto (max weight)
+    organizer_raw = _get(hag_raw, "organizer_index", HAGParams.organizer_index)
+    organizer_index = None if organizer_raw is None else int(organizer_raw)
+
     hag = HAGParams(
         alpha=float(_get(hag_raw, "alpha", 0.3)),
         delta=float(_get(hag_raw, "delta", 0.1)),
@@ -84,6 +88,7 @@ def load_default_config(path: str | Path) -> RunConfig:
         cr1=float(_get(hag_raw, "cr1", 10.0)),
         k1_label=int(_get(hag_raw, "k1_label", 1)),
         k2_label=int(_get(hag_raw, "k2_label", 2)),
+        organizer_index=organizer_index,
         majorizing=majorizing,
     )
 
@@ -98,3 +103,17 @@ def load_default_config(path: str | Path) -> RunConfig:
     seed = int(_get(raw, "seed", 42))
 
     return RunConfig(dataset=dataset, hag=hag, output=output, seed=seed)
+
+
+def load_dataset_catalog(path: str | Path) -> Dict[str, Dict[str, Any]]:
+    """
+    Load the optional `dataset_catalog` block (preset name -> {"path": ...}).
+    Used by the GUI dataset dropdown; entries without a path are skipped.
+    """
+    raw = _as_dict(yaml.safe_load(Path(path).read_text(encoding="utf-8")))
+    catalog: Dict[str, Dict[str, Any]] = {}
+    for name, entry in _as_dict(raw.get("dataset_catalog", {})).items():
+        entry = _as_dict(entry)
+        if entry.get("path"):
+            catalog[str(name)] = entry
+    return catalog

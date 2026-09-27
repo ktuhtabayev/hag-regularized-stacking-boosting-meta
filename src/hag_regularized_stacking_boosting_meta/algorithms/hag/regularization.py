@@ -4,7 +4,7 @@ from typing import Dict
 
 import numpy as np
 
-from .majorizing import MajorizingFn
+from .majorizing_functions import MajorizingFn
 
 
 def _class_sign(y: np.ndarray, k1_label: int, k2_label: int) -> np.ndarray:

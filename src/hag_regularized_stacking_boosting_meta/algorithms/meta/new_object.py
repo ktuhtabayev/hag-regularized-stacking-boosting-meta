@@ -57,6 +57,40 @@ def _compute_gamma_map(
     return {int(k): float(v) for k, v in (q_res.gamma or {}).items()}
 
 
+def quantitative_to_binary(x: float, gamma_c: float) -> int:
+    """Γc binarization of one quantitative value: x <= Γc -> 1, else 2."""
+    return 1 if float(x) <= float(gamma_c) else 2
+
+
+def binarize_new_object(
+    a_init: Sequence[float],
+    *,
+    tuplam: Sequence[int],
+    feature_types: np.ndarray,
+    gamma_map: Dict[int, float],
+) -> np.ndarray:
+    """
+    Initial-format Snew values (TUPLAM order) -> binary format:
+      quantitative -> {1,2} by Γc, nominal -> unchanged.
+    Used to classify a user-entered new object.
+    """
+    feature_types = np.asarray(feature_types, dtype=int).reshape(-1)
+    values = [float(v) for v in a_init]
+    if len(values) != len(tuplam):
+        raise ValueError(f"Snew needs {len(tuplam)} values (one per TUPLAM feature), got {len(values)}")
+
+    out: List[float] = []
+    for x, fidx in zip(values, tuplam):
+        if feature_types[int(fidx)] == 1:
+            gamma = gamma_map.get(int(fidx))
+            if gamma is None:
+                raise RuntimeError(f"No gamma threshold found for quantitative feature {fidx}.")
+            out.append(quantitative_to_binary(x, gamma))
+        else:
+            out.append(float(_as_int_if_possible(x)))
+    return np.asarray(out, dtype=float)
+
+
 def _column_is_integer_valued(col: np.ndarray, *, atol: float = 1e-9) -> bool:
     """
     True if all values in the column are essentially integers.
@@ -108,6 +142,7 @@ def form_meta_new_object(
     feature_types: np.ndarray,
     tuplam: Sequence[int],
     seed: int | None = None,
+    gamma_map: Dict[int, float] | None = None,
 ) -> MetaNewObject:
     """
     Build a random new object Snew=(a0..ap) following META prep rules:
@@ -124,6 +159,9 @@ def form_meta_new_object(
 
     LABELS (ONLY HERE):
       a0(x2), a1(x5), ...  (0-based x index)
+
+    gamma_map: optional precomputed Γc per quantitative feature (avoids recomputing
+    the quantitative pipeline).
     """
     X = np.asarray(X, dtype=float)
     y = np.asarray(y, dtype=int).reshape(-1)
@@ -145,7 +183,8 @@ def form_meta_new_object(
             raise ValueError(f"tuplam index out of range: {idx} for n={n}")
 
     rng = np.random.default_rng(seed)
-    gamma_map = _compute_gamma_map(X, y, feature_types)
+    if gamma_map is None:
+        gamma_map = _compute_gamma_map(X, y, feature_types)
 
     headers: List[str] = []
     init_vals: List[float] = []
@@ -170,8 +209,7 @@ def form_meta_new_object(
                     f"No gamma threshold found for quantitative feature {fidx}. "
                     "Check feature_types and quantitative pipeline."
                 )
-            x_bin = 1 if float(x_raw) <= float(gamma) else 2
-            bin_vals.append(int(x_bin))
+            bin_vals.append(quantitative_to_binary(x_raw, gamma))
         else:
             # nominal
             x_nom = _random_nominal_value(X[:, fidx], rng)

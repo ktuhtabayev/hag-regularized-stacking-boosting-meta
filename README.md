@@ -1,225 +1,294 @@
-hag-regularized-stacking-boosting-meta/
-│
-├─ README.md                                    # This file: overview + run instructions + project rules
-├─ pyproject.toml                               # Dependencies + src-layout packaging config
-├─ .gitignore                                   # Ignore venv, caches, outputs, large datasets, etc.
-│
-├─ configs/                                     # Reproducible experiment settings (NO python code here)
-│  ├─ default.yaml                              # Default dataset + α, δ, κ + majorizing function + seed + output dirs
-│  ├─ experiments.yaml                          # Grid/ablation configs (multiple runs)
-│  └─ gui_last_used.yaml                        # GUI saves last-selected dataset/params for convenience
-│
-├─ datasets/                                    # Data storage (never import from here directly in algorithms)
-│  ├─ raw/                                      # Original datasets (immutable)
-│  │  ├─ default.csv                            # DEFAULT INPUT FILE (your extended CSV format)
-│  │  ├─ default.dat                            # DEFAULT INPUT FILE (DAT: "m n c" + m rows + feature-sign row)
-│  │  └─ ...                                    # Future raw files: .dat, .xlsx, .txt
-│  ├─ interim/                                  # Intermediate transformed data (optional)
-│  └─ processed/                                # Final cleaned/encoded datasets for training/testing
-│
-├─ outputs/                                     # All artifacts written here (auto-generated)
-│  ├─ runs/                                     # Reproducible run folders (scripts + GUI)
-│  │  ├─ quantitative_demo/                     # Quantitative stage runs (Criterion-1 → Γc → binary → η)
-│  │  │  └─ <run_id>/                           # run_id = timestamp + short uuid
-│  │  │     ├─ dataset_path.txt                 # Dataset path used in this run (quick human check)
-│  │  │     ├─ dataset_config.json              # DatasetConfig snapshot (format/delimiter/label_mapping/etc.)
-│  │  │     ├─ criterion1_table.json            # Criterion-1 results + π values + Γc + η per quantitative feature
-│  │  │     ├─ quantitative_binary.csv          # Quantitative features → nominal {1,2} (keeps original qf indices)
-│  │  │     └─ quantitative_contrib.csv         # Nominal {1,2} → contributions η (same indices; for reunification)
-│  │  │
-│  │  ├─ nominal_demo/                          # Nominal stage runs (λ, β, ω → η contributions)
-│  │  │  └─ <run_id>/                           # Each nominal run folder
-│  │  │     ├─ dataset_path.txt                 # Dataset path used in this run
-│  │  │     ├─ dataset_config.json              # DatasetConfig snapshot
-│  │  │     ├─ lambda_beta_weight_table.json    # λ, β, ω and gradations and η per nominal feature (GUI + audit)
-│  │  │     └─ nominal_contrib.csv              # Nominal features replaced by η contributions (same indices)
-│  │  │
-│  │  ├─ hag_prep/                              # Prep stage before HAG: merge contrib + build global weight ranking
-│  │  │  └─ <run_id>/                           # Each prep run folder (timestamp + short uuid)
-│  │  │     ├─ dataset_path.txt                 # Dataset path used in this run
-│  │  │     ├─ dataset_config.json              # DatasetConfig snapshot (reproducibility)
-│  │  │     ├─ merged_contrib.csv               # Full dataset (quant+nom) replaced by contribution values (keeps feature order)
-│  │  │     ├─ weights.json                     # Per-feature weights (ω) by original feature index (0-based in code)
-│  │  │     └─ weight_rank.json                 # Sorted indices (desc by weight), stable tie-break (left-to-right)
-│  │  │
-│  │  ├─ train/                                 # HAG training stage outputs (TUPLAM, R-history, dij)
-│  │  │  └─ <run_id>/                           # Each training run gets its own folder
-│  │  │     ├─ dataset_path.txt                 # Dataset path used for training stage
-│  │  │     ├─ dataset_config.json              # DatasetConfig snapshot (reproducibility)
-│  │  │     ├─ run_config.json                  # Run config snapshot (α, δ, κ, majorizing params, seed, etc.)
-│  │  │     ├─ tuplam.json                      # Final selected feature set TUPLAM (0-based original feature indices)
-│  │  │     └─ dij.csv                          # Latent feature matrix (output of latent step)
-│  │  │
-│  │  ├─ meta_prep/                             # Preparation stage for META (build Si table: ai* + di* + Class)
-│  │  │  └─ <run_id>/                           # Each META prep run folder
-│  │  │     ├─ dataset_path.txt                 # Dataset path used
-│  │  │     ├─ dataset_config.json              # DatasetConfig snapshot
-│  │  │     ├─ run_config.json                  # HAG config snapshot used to generate TUPLAM/dij
-│  │  │     ├─ tuplam.json                      # Copied/linked TUPLAM used for META (0-based)
-│  │  │     ├─ dij.csv                          # Copied/linked dij latent matrix (r1..rp)
-│  │  │     └─ meta_train.csv                   # META training dataset (ai0..aip, di1..dip, Class)
-│  │  │
-│  │  ├─ meta_new_object/                       # Build Snew=(a0..ap) for META (initial + binary formats); GUI-ready
-│  │  │  └─ <run_id>/                           # Each new-object generation run folder
-│  │  │     ├─ source.txt                       # Where TUPLAM came from (auto reuse latest train run / explicit run / rerun HAG)
-│  │  │     ├─ config_path.txt                  # Config file path used by the demo script
-│  │  │     ├─ dataset_path.txt                 # Dataset path used for this Snew
-│  │  │     ├─ train_run_dir.txt                # (optional) reused HAG train run folder path
-│  │  │     ├─ tuplam.txt                       # TUPLAM used (0-based)
-│  │  │     ├─ snew_headers.txt                 # Headers for Snew (a0(x2), a1(x5), ...)
-│  │  │     ├─ snew_init.csv                    # Snew initial-format values (nominal original, quantitative raw in dataset format)
-│  │  │     ├─ snew_binary.csv                  # Snew binary-format values (quantitative -> {1,2}; nominal unchanged)
-│  │  │     └─ snew.json                        # GUI-friendly JSON snapshot of Snew, headers, gamma_map, source, dataset path
-│  │  │
-│  │  ├─ margin_analysis/                       # Margin Analysis runs (Excel experiments ported to Python)
-│  │  │  └─ <run_id>/                           # Each margin analysis run folder (timestamp + short uuid)
-│  │  │     ├─ latent_r1_object_margins.csv     # Per-object margins for r1: Sid,d,Class,ObjectMargin,yhat
-│  │  │     ├─ latent_r2_object_margins.csv     # Per-object margins for r2: Sid,d,Class,ObjectMargin,yhat
-│  │  │     ├─ latent_r3_object_margins.csv     # Per-object margins for r3: Sid,d,Class,ObjectMargin,yhat
-│  │  │     ├─ latent_r4_object_margins.csv     # Per-object margins for r4: Sid,d,Class,ObjectMargin,yhat
-│  │  │     ├─ margin_report.csv                # Per-latent-feature report: boundaries, midpoint, width, argmax/argmin indices
-│  │  │     └─ margin_report.json               # Same report as JSON (GUI-friendly)
-│  │  │
-│  │  ├─ predict/                               # META prediction stage outputs (B1/B2 filtering + decision)
-│  │  │  └─ <run_id>/                           # Prediction run folder
-│  │  │     ├─ artifacts_ref.json               # References to train/meta_prep/meta_new_object artifacts used in prediction
-│  │  │     ├─ prediction.json                  # Final predicted label + a_new binary vector
-│  │  │     └─ meta_debug.json                  # GUI-friendly full B1/B2 history per j + decision summary
-│  │  │
-│  │  ├─ evaluate/                              # (future) Evaluation stage outputs (metrics + reports + plots)
-│  │  │  └─ <run_id>/                           # Evaluation run folder
-│  │  │     ├─ metrics.json                     # accuracy/F1/AUC/etc.
-│  │  │     ├─ confusion_matrix.csv             # Confusion matrix raw values
-│  │  │     └─ report.md                        # Human-readable summary for thesis/paper (optional)
-│  │  │
-│  │  └─ gui/                                   # (future) GUI-driven runs (single place for the app to browse)
-│  │     └─ <run_id>/                           # GUI session run folder
-│  │        ├─ gui_state.json                   # Last UI state: selected dataset/params/tab/etc.
-│  │        ├─ logs.txt                         # GUI session logs
-│  │        └─ links.json                       # Links to train/predict/eval runs produced by GUI actions (optional)
-│  │
-│  ├─ figures/                                  # Saved plots for papers/thesis (PNG/PDF)
-│  └─ logs/                                     # Global logs (optional; per-run logs can also exist)
-│
-├─ resources/                                   # Non-code assets
-│  ├─ article/                                  # PDF/article copies
-│  ├─ experiments/                              # Excel notes + experiment evidence (Heart-Disease [10, 13, 2], etc.)
-│  ├─ screenshots/                              # Equation screenshots, UI screenshots
-│  └─ notes/                                    # Notes, derivations, TODOs, references
-│
-├─ src/                                         # Installable Python package root (src-layout; clean imports)
-│  └─ hag_regularized_stacking_boosting_meta/
-│     ├─ __init__.py                            # Package exports (keep minimal)
-│     │
-│     ├─ domain/                                # Data contracts (dataclasses), types, parameters, errors
-│     │  ├─ __init__.py                         # Expose key dataclasses (Params, Artifacts, etc.)
-│     │  ├─ params.py                           # RunConfig + DatasetConfig + HAGParams + MajorizingConfig (single source of truth)
-│     │  ├─ schema.py                           # Dataset schema: feature types, label mapping, selected cols
-│     │  ├─ artifacts.py                        # HAGArtifacts(TUPLAM, dij, ...), MetaArtifacts, RunResult
-│     │  └─ errors.py                           # Custom exceptions (ValidationError, MissingArtifactsError, etc.)
-│     │
-│     ├─ algorithms/                            # Pure algorithm code (NO IO, NO GUI, minimal logging)
-│     │  ├─ __init__.py                         # algorithms package marker (stable imports)
-│     │  │
-│     │  ├─ hag/                                # Algorithm 1: Greedy HAG + Regularization + Latent Features
-│     │  │  ├─ __init__.py                      # Public API exports for HAG (build_tuplam, etc.)
-│     │  │  ├─ greedy_grouping.py               # Step 1–5 loop: build TUPLAM using θ/γ + stopping (κ, δ)
-│     │  │  ├─ prep.py                          # Merge quant+nom contribution datasets + compute global ω ranking
-│     │  │  ├─ weights.py                       # Stable facade routing to weights_quant / weights_nominal
-│     │  │  ├─ weights_quant.py                 # Quantitative: Criterion-1, Γc, binary dataset, η contributions
-│     │  │  ├─ weights_nominal.py               # Nominal: λ, β, ω, gradations, η contributions
-│     │  │  ├─ majorizing.py                    # Majorizing function factory (identity/sigmoid/logistic/...)
-│     │  │  ├─ stats.py                         # M1/M2, θ, γ, θ/γ; safe ratio handling
-│     │  │  ├─ update.py                        # R(St) update, b_t creation, margin adjustment ±α f(-·)
-│     │  │  ├─ selection.py                     # Candidate scan in Step 3: choose best q using θ/γ
-│     │  │  └─ latent.py                        # Build dij/additional features; produce latent feature matrix
-│     │  │
-│     │  └─ meta/                               # Algorithm 2: META classifier (filter + decision)
-│     │     ├─ __init__.py                      # Public API: MetaClassifier, MetaPredictResult, debug exports
-│     │     ├─ prep.py                          # Preparation for META (build Si = ai* + di* + Class)
-│     │     ├─ new_object.py                    # Build Snew=(a0..ap) (initial + binary) for GUI/scripts
-│     │     ├─ filtering.py                     # META Step 1–3: construct/filter B1/B2 by matches + sign rules
-│     │     ├─ decision.py                      # META Step 4: compare scores; output class (K1/K2/0)
-│     │     └─ classifier.py                    # OOP wrapper: fit(A,D,y), predict(a_new), predict_batch
-│     │
-│     ├─ evaluation/                            # Evaluation utilities (Margin now; later confusion/metrics/reports/plots)
-│     │  ├─ __init__.py                         # Export evaluation API (margin/metrics/confusion/report/plot helpers)
-│     │  ├─ margin.py                           # Margin analysis on dij: boundaries, midpoint, width, object margins, yhat
-│     │  ├─ confusion.py                        # Confusion matrix helpers (planned; can start minimal)
-│     │  ├─ metrics.py                          # Accuracy/Precision/Recall/F1/AUC helpers (planned; can start minimal)
-│     │  ├─ reports.py                          # JSON/Markdown report builders (planned; for GUI + paper)
-│     │  └─ plots.py                            # Matplotlib evaluation plots (planned; margin/CM/perf curves)
-│     │
-│     ├─ services/                              # Orchestration layer (HAG → META → evaluation), GUI entry point
-│     │  ├─ __init__.py                         # Service exports (runner/trainer/predictor/evaluator)
-│     │  ├─ trainer.py                          # Runs HAG training; returns artifacts (TUPLAM, dij, history)
-│     │  ├─ predictor.py                        # Runs META prediction; returns predictions + debug info
-│     │  ├─ evaluator.py                        # Metrics + summaries for GUI and reports (future extension)
-│     │  └─ runner.py                           # EndToEndRunner: train→predict→evaluate (GUI-friendly)
-│     │
-│     ├─ io/                                    # Data & artifact IO (isolated from algorithms)
-│     │  ├─ __init__.py                         # IO package marker
-│     │  ├─ loaders.py                          # Dataset loaders (csv_extended + csv_simple + dat_matrix)
-│     │  ├─ writers.py                          # Artifact writers (json/csv) to outputs/runs/...
-│     │  ├─ serialization.py                    # JSON/YAML helpers; versioned formats
-│     │  ├─ configs.py                          # YAML → RunConfig/DatasetConfig/HAGParams loader
-│     │  │
-│     │  └─ formats/                            # Pluggable dataset loaders (future split/extension)
-│     │     ├─ __init__.py                      # Registers built-in loaders
-│     │     ├─ base.py                          # Loader protocol + registry
-│     │     ├─ csv_simple.py                    # Basic CSV format loader
-│     │     ├─ csv_extended.py                  # Extended CSV loader: header + feature-type row
-│     │     ├─ dat_matrix.py                    # DAT loader placeholder (if later moved out of loaders.py)
-│     │     ├─ excel_xlsx.py                    # Future: .xlsx loader
-│     │     └─ txt_space.py                     # Future: space-separated .txt loader
-│     │
-│     ├─ viz/                                   # Visualization utilities (matplotlib only; no GUI widgets)
-│     │  ├─ __init__.py                         # Visualization package marker
-│     │  └─ plots.py                            # θ/γ vs iteration, R distributions, survival plots, confusion matrix
-│     │
-│     └─ utils/                                 # General helpers (safe to import anywhere)
-│        ├─ __init__.py                         # Utils package marker
-│        ├─ logging.py                          # Logger setup, formatting, per-run routing
-│        └─ paths.py                            # Path helpers: project root, run-id, safe joins
-│
-├─ app/                                         # PyQt GUI application (thin layer)
-│  ├─ main.py                                   # GUI entry point: QApplication + MainWindow
-│  ├─ ui/                                       # UI definitions (.ui or widgets)
-│  ├─ controllers/                              # UI ↔ services.runner; manages pipeline state
-│  ├─ workers/                                  # QThread/QRunnable: long tasks without freezing UI
-│  ├─ widgets/                                  # Custom reusable widgets (tables, plots, parameter panels)
-│  └─ assets/                                   # Icons, themes (QSS), images
-│
-├─ scripts/                                     # CLI helpers (batch experiments + demos)
-│  ├─ _quick_load_test.py                       # Loader sanity check (prints shapes + indices)
-│  ├─ convert_dat2csv.py                        # Utility: convert .dat → .csv (dataset preparation / locale cleanup)
-│  ├─ hag_prep_demo.py                          # Runs HAG prep stage → outputs/runs/hag_prep/<run_id>/
-│  ├─ load_from_yaml_test.py                    # Tiny sanity test: load YAML and print resolved params
-│  ├─ margin_analysis_demo.py                   # Runs margin analysis on dij.csv → outputs/runs/margin_analysis/<run_id>/
-│  ├─ meta_new_object_demo.py                   # Creates new object Snew → outputs/runs/meta_new_object/<run_id>/
-│  ├─ meta_predict_demo.py                      # Runs META prediction + saves debug JSON → outputs/runs/predict/<run_id>/
-│  ├─ meta_prep_demo.py                         # Builds meta_train.csv → outputs/runs/meta_prep/<run_id>/
-│  ├─ nominal_demo.py                           # Runs nominal stage (prints message if no nominal features)
-│  ├─ quantitative_demo.py                      # Runs quantitative stage (prints message if no quantitative features)
-│  ├─ run_experiments.py                        # Batch runner for experiments.yaml (grid-ready)
-│  └─ train_hag_demo.py                         # Runs HAG training → outputs/runs/train/<run_id>/
-│
-└─ tests/                                       # Unit + integration tests (pytest)
-   ├─ test_weights_eta.py                       # Validate ω/η computations on small known examples
-   ├─ test_theta_gamma.py                       # Validate θ, γ, θ/γ math and edge cases (gamma=0)
-   ├─ test_hag_stop_rule.py                     # Validate stopping rule: (|TUPLAM|<κ and crit>δ)
-   ├─ test_meta_step4_decision.py               # Known case: 1/4 vs 2/6 → K2; also tie → 0
-   └─ test_end_to_end_small.py                  # Tiny dataset end-to-end: HAG→latent→META stable output
+# HAG Regularized Stacking Boosting META
 
-## Setup (Windows, Python 3.12.10)
+Local Python implementation of a two-algorithm classifier for two-class datasets
+with mixed quantitative and nominal features:
+
+- **Algorithm 1 — HAG**: feature weights (Criterion-1 for quantitative features,
+  λ·β for nominal ones), contribution values η, and greedy grouping with a
+  regularizer `±α·f(−·)` built on a majorizing function `f`. It selects the
+  ordered feature set TUPLAM and produces latent features r1..rp.
+- **Algorithm 2 — META**: classifies a new object `Snew` by filtering the
+  training objects through the TUPLAM features and the signs of the latent
+  features, then comparing class scores.
+- **Margin analysis** of the latent features, showing how the regularizer widens
+  the margin between the classes step by step.
+
+The project has two ways to run:
+
+- stage scripts: one command per algorithm stage, writing reproducible run folders
+- PyQt6 desktop GUI: a local research dashboard that runs every stage and shows all tables and plots
+
+No web frontend, database, or server is used.
+
+## Setup
+
+Clone the repository:
 
 ```powershell
-cd D:\PhD\CODING\hag-regularized-stacking-boosting-meta
-& "C:\Program Files\Python312\python.exe" -m venv .venv
-.venv\Scripts\python.exe -m pip install --upgrade pip
-.venv\Scripts\python.exe -m pip install -e ".[dev]"
+git clone https://github.com/ktuhtabayev/hag-regularized-stacking-boosting-meta.git
+cd hag-regularized-stacking-boosting-meta
+```
 
-.venv\Scripts\python.exe -m pytest          # tests
-.venv\Scripts\python.exe -m ruff check .    # lint
-.venv\Scripts\python.exe scripts\train_hag_demo.py   # run scripts from the project root (paths in configs/ are relative)
+Create the project virtual environment (Python 3.10+; developed on 3.12.10) and
+install the package from the repository root:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+```
+
+The code resolves project paths relative to the repository root, but a virtual
+environment stores absolute paths. If the project folder is moved or renamed,
+delete `.venv` and create it again.
+
+Check the environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -c "import numpy, pandas, yaml, PyQt6, hag_regularized_stacking_boosting_meta; print('OK')"
+```
+
+## Run
+
+Launch the GUI:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\launch_gui.py
+```
+
+Run all tests and the linter:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+```
+
+Run the stage scripts from the repository root (paths in `configs/` are relative
+to it), in pipeline order:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\run_quantitative_weights.py   # Criterion-1, Γc, binary {1,2}, η
+.\.venv\Scripts\python.exe scripts\run_nominal_weights.py        # λ, β, ω, η
+.\.venv\Scripts\python.exe scripts\run_hag_prep.py               # merged contributions + weight ranking
+.\.venv\Scripts\python.exe scripts\run_hag_training.py           # HAG: TUPLAM + latent features dij
+.\.venv\Scripts\python.exe scripts\run_meta_prep.py              # META training set (ai*, di*, Class)
+.\.venv\Scripts\python.exe scripts\run_meta_new_object.py        # random new object Snew
+.\.venv\Scripts\python.exe scripts\run_meta_prediction.py        # META classification of Snew
+.\.venv\Scripts\python.exe scripts\run_margin_analysis.py        # margins of the latent features
+```
+
+`run_meta_prediction.py` creates any missing upstream run automatically; add
+`--reuse-new-object` to classify the latest saved `Snew` instead of a new one.
+`run_hag_training.py` prints the Excel-style Step-3 columns (B, D, F, H, I–O) for
+every candidate, which is useful for checking small datasets against Excel.
+
+`scripts\convert_dat2csv.py` converts a `.dat` dataset into the equivalent CSV
+(set `input_path` / `output_path` inside the script).
+
+## Configuration
+
+Everything is configured in:
+
+```text
+configs/default.yaml
+```
+
+- `dataset`: active dataset path (`format: auto` picks the loader from the file extension)
+- `hag`: α (`alpha`), δ (`delta`), κ (`kappa`), `cr1`, class labels, `organizer_index`,
+  and the majorizing function `f` (`majorizing.name` + `majorizing.params`)
+- `seed`: seed of the random new object `Snew`
+- `dataset_catalog`: dataset presets shown in the GUI dropdown
+
+`organizer_index: 2` reproduces the Excel experiment (x3 in Excel is index 2 in
+code). Set it to `null` to use the feature with the highest weight ω.
+
+Supported majorizing functions:
+
+| Name | f(x) | Parameters |
+| --- | --- | --- |
+| `identity` | x | — |
+| `sigmoid`, `logistic` | 1 / (1 + e^(−k(x − x0))) | `k`, `x0` |
+| `exponential` | scale · e^(k(x − x0)) | `k`, `x0`, `scale` |
+| `quadratic` | a·x² + b·x + c | `a`, `b`, `c` |
+| `piecewise_linear` | linear interpolation through (x[i], y[i]) | `x`, `y` |
+
+## Datasets
+
+All datasets use the same extended layout, as CSV or whitespace-separated DAT:
+
+```text
+m, n, c                 first row: objects, features, classes
+x1 ... xn, Class        m data rows (class labels 1 and 2)
+t1 ... tn               last row: feature types (1 = quantitative, 0 = nominal)
+```
+
+| Dataset | Objects | Features | Quantitative | Nominal | Files |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Default (= Heart-Disease 10) | 10 | 13 | 6 | 7 | csv, dat |
+| Heart-Disease | 10 | 13 | 6 | 7 | csv, dat |
+| Heart-Disease | 270 | 13 | 6 | 7 | csv, dat |
+| Cancer | 589 | 44 | 44 | 0 | csv, dat |
+| Cancer-N | 589 | 44 | 0 | 44 | dat |
+| DDos | 10000 | 80 | 79 | 1 | csv, dat |
+| DDos | 10000 | 22 | 22 | 0 | dat |
+| DDos-N | 10000 | 80 | 0 | 80 | dat |
+| Molecular-Biology | 100 | 10 | 0 | 10 | dat |
+| Molecular-Biology | 100 | 50 | 0 | 50 | dat |
+
+The startup dataset is `datasets/raw/default.csv`.
+
+## GUI
+
+The PyQt6 app is a local research dashboard. It provides:
+
+- dataset preset dropdown (from `dataset_catalog`) plus a free path picker
+- HAG parameters: α, δ, κ, organizer (a feature index or *Auto*), majorizing function and its parameters
+- Run action that executes in a background thread with a busy indicator and stage messages
+- Export and Open Output Folder actions
+- window geometry persists between sessions; the dataset and parameters reset to `configs/default.yaml`
+- grouped result tabs:
+  - Dataset: objects and a feature summary (type, ω, rank, Γc, TUPLAM position)
+  - Quantitative Weights: Criterion-1 (π1, π2, π3, ω, Γc, η), binary {1,2} table, contributions
+  - Nominal Weights: λ, β, ω, gradation counts with η, contributions
+  - HAG Prep: merged contribution table, weight ranking
+  - HAG Training: iterations with the stop rule, Step 3 θ/γ scan of every candidate,
+    latent features dij, criterion plot
+  - META Training Set: `ai0..aip`, `di1..dip`, `Class`
+  - META Classification: editable `Snew` (initial values are binarized by Γc),
+    random `Snew` by seed, B1/B2 filtering history, Step 4 decision
+  - Margin Analysis: margin report, per-object margins, and an animated margin plot
+    that steps through r1..rp
+
+Objects are labeled `S0, S1, ...` and features `x0, x1, ...` (0-based, as in the
+code), so the ids in the B1/B2 sets match the table rows.
+
+## Outputs
+
+Every output is written under `outputs/runs/` (ignored by git).
+
+A GUI run writes `outputs/runs/gui/<run_id>/`; Export rewrites the same folder with
+the currently shown `Snew`:
+
+```text
+run_info.json            parameters, TUPLAM, θ/γ history, Snew and its class
+dataset_path.txt
+dataset_config.json
+dataset/                 dataset.csv, features.csv
+quantitative/            criterion1.csv, binary.csv, contributions.csv
+nominal/                 weights.csv, gradations.csv, contributions.csv
+hag/                     merged_contributions.csv, weight_rank.csv, iterations.csv,
+                         step3_scan.csv, dij.csv
+meta/                    meta_train.csv, snew.csv, filtering.csv, decision.csv
+margin/                  margin_report.csv, latent_r<j>_object_margins.csv
+figures/                 PNGs saved from the plot tabs
+```
+
+Each stage script writes `outputs/runs/<stage>/<run_id>/` with
+`<run_id> = YYYYMMDD_HHMMSS_<8 hex>`; the stage folders are `quantitative_weights`,
+`nominal_weights`, `hag_prep`, `train`, `meta_prep`, `meta_new_object`, `predict`,
+and `margin_analysis`.
+
+## Algorithm
+
+Let `K1` and `K2` be the two classes, `m` objects and `n` features. All indices
+in code and outputs are 0-based.
+
+### Feature weights and contributions
+
+Quantitative feature `c` (Criterion-1): objects are sorted by `x_c`, and every
+split into a left and a right part is scored
+
+```text
+score = [Σ_parts Σ_classes (u² − u)] / [(|K1|² − |K1|) + (|K2|² − |K2|)]
+      · [Σ_parts (u1·(|K2| − u2) + u2·(|K1| − u1))] / (2·|K1|·|K2|)
+```
+
+where `u1`, `u2` count class objects in a part. The best score is the weight
+`ω_c`, its split value is `π2` (`π1`, `π3` are the minimum and maximum), and the
+threshold is
+
+```text
+Γc = (π2 + b) / 2,   b = nearest value above π2
+binary value = 1 if x ≤ Γc, else 2
+```
+
+Nominal feature `c` with gradation counts `g1_j` (in K1) and `g2_j` (in K2):
+
+```text
+λ_c = 1 − Σ_j g1_j·g2_j / (2·|K1|·|K2|)
+β_c = Σ_j [g1_j(g1_j − 1) + g2_j(g2_j − 1)] / (D1 + D2)
+D_d = (|K_d| − l_d + 1)(|K_d| − l_d)  if μ > 2,  else |K_d|(|K_d| − 1)
+ω_c = λ_c · β_c
+```
+
+Contribution of gradation `j` (both feature kinds):
+
+```text
+η_c(j) = ω_c · (g1_j / |K1| − g2_j / |K2|)
+```
+
+### HAG (Algorithm 1)
+
+Each object gets the sign `s = +1` in K1 and `s = −1` in K2. Starting from the
+organizer `u` (TUPLAM = {u}, `R` = its contribution column):
+
+1. Step 3: for every remaining candidate `q`
+   `F = R + η_q`, `H = F + s·α·f(−F)`, and θ/γ is computed from running class
+   means of `H` (Excel columns I–O). The candidate with the smallest θ/γ
+   (below `cr1`) is selected.
+2. Step 4: `R ← H + s·α·f(−H)` becomes the next organizer and the latent
+   feature `r_t`.
+3. Continue while `|TUPLAM| < κ` and `θ/γ > δ` (and candidates remain).
+
+### META (Algorithm 2)
+
+Training rows are `S_i = (ai0..aip, di1..dip, Class)`: `ai_j` is the value of the
+j-th TUPLAM feature (quantitative values binarized by Γc) and `di_j = r_j`.
+For a new object `Snew = (a0..ap)`:
+
+```text
+Step 1:    B1(a0) = {S_i ∈ K1 | ai0 = a0},  B2(a0) = {S_i ∈ K2 | ai0 = a0}
+Step 2:    B1(a_j) = {S_i ∈ B1(a_{j−1}) | ai_j = a_j, di_j > 0}
+           B2(a_j) = {S_i ∈ B2(a_{j−1}) | ai_j = a_j, di_j < 0},   j = 1..p
+Step 4:    score1 = |B1(a_p)| / |K1|,  score2 = |B2(a_p)| / |K2|
+           Snew ∈ K1 if score1 > score2, K2 if score1 < score2, else 0
+```
+
+### Margin analysis
+
+For each latent feature `d = r_j`:
+
+```text
+left boundary  L = max over K2 of d
+right boundary R = min over K1 of d
+midpoint = (L + R) / 2,   width = R − L   (negative = the classes overlap)
+object margin = ±(d − midpoint)  (+ for K1, − for K2),   ŷ = K1 if d > midpoint
+```
+
+## Project Layout
+
+```text
+configs/        default.yaml (dataset, HAG parameters, dataset catalog)
+datasets/raw/   datasets (CSV and DAT)
+outputs/        generated run outputs (ignored by git)
+resources/      article and Excel experiments with their cheatsheets
+scripts/        GUI launcher, stage scripts, dat -> csv converter
+src/            Python package
+tests/          pytest suite
+```
+
+Core package modules (`src/hag_regularized_stacking_boosting_meta/`):
+
+```text
+algorithms/hag/     weights_quantitative, weights_nominal, weights (facade),
+                    input_preparation, majorizing_functions, regularization,
+                    theta_gamma, candidate_selection, greedy_grouping, latent_features
+algorithms/meta/    training_set, new_object, filtering, decision, classifier
+evaluation/         margin_analysis
+domain/             params (HAGParams, MajorizingConfig)
+io/                 configs, loaders (csv/dat), writers
+services/           runner (end-to-end pipeline), report_builder (tables)
+gui/                app (PyQt6 window), plots, theme
+utils/              run_manager (run ids and folders)
 ```
