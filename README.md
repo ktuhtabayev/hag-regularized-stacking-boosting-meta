@@ -78,13 +78,23 @@ to it), in pipeline order:
 .\.venv\Scripts\python.exe scripts\run_margin_analysis.py        # margins of the latent features
 ```
 
-`run_meta_prediction.py` creates any missing upstream run automatically; add
-`--reuse-new-object` to classify the latest saved `Snew` instead of a new one.
+Every stage script accepts `--config <path>` (default `configs/default.yaml`) and writes
+under the config's `output` folder.
+`run_meta_prediction.py` creates any missing upstream run automatically (passing its
+`--config` on); add `--reuse-new-object` to classify the latest saved `Snew` instead of a
+new one. `run_meta_new_object.py` draws a fresh random `Snew` on every run; add
+`--seed <n>` to reproduce one.
 `run_hag_training.py` prints the Excel-style Step-3 columns (B, D, F, H, I–O) for
 every candidate, which is useful for checking small datasets against Excel.
 
-`scripts\convert_dat2csv.py` converts a `.dat` dataset into the equivalent CSV
-(set `input_path` / `output_path` inside the script).
+`scripts\convert_dat2csv.py` converts a `.dat` dataset into the equivalent CSV:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\convert_dat2csv.py "datasets\raw\Cancer\Cancer (589, 44, 2).dat"
+```
+
+The output path defaults to the input with a `.csv` extension (pass it as a second argument
+to choose another).
 
 ## Configuration
 
@@ -145,7 +155,8 @@ The startup dataset is `datasets/raw/default.csv`.
 The PyQt6 app is a local research dashboard. It provides:
 
 - dataset preset dropdown (from `dataset_catalog`) plus a free path picker
-- HAG parameters: α, δ, κ, organizer (a feature index or *Auto*), majorizing function and its parameters
+- HAG parameters: α, δ, κ, majorizing function and its parameters; the organizer found by
+  the last Run is shown read-only next to them
 - Run action that executes in a background thread with a busy indicator and stage messages
 - Export and Open Output Folder actions
 - window geometry persists between sessions; the dataset and parameters reset to `configs/default.yaml`
@@ -295,4 +306,10 @@ io/                 configs, loaders (csv/dat), writers
 services/           runner (end-to-end pipeline), report_builder (tables)
 gui/                app (PyQt6 window), plots, theme
 utils/              run_manager (run ids and folders)
+cli.py              shared plumbing of the stage scripts (--config, run folders, artifacts)
 ```
+
+Criterion-1 and the Step-3 θ/γ running columns are computed with prefix sums
+(`np.cumsum`) instead of per-object loops; they give bit-identical results to the
+element-by-element formulas (checked against loop reference implementations in
+`tests/test_hag_equivalence.py`), so the 10000-object datasets run in seconds.
