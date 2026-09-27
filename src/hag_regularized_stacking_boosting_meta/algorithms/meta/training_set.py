@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
 from hag_regularized_stacking_boosting_meta.algorithms.hag.weights import (
+    QuantitativePipelineResult,
     build_quantitative_nominalization,
 )
 
@@ -43,7 +44,7 @@ def _build_quant_binary_map(
     X: np.ndarray,
     y: np.ndarray,
     quantitative_idx: Sequence[int],
-    quantitative_result: Optional[Any] = None,
+    quantitative_result: Optional[QuantitativePipelineResult] = None,
 ) -> Dict[int, np.ndarray]:
     """
     Builds a dict:
@@ -70,7 +71,7 @@ def prepare_meta_training_dataset(
     feature_types: np.ndarray,
     tuplam: Sequence[int],
     dij: np.ndarray,
-    quantitative_result: Optional[Any] = None,
+    quantitative_result: Optional[QuantitativePipelineResult] = None,
 ) -> MetaPrepResult:
     """
     PREPARATION FOR META ALGORITHM (Excel-faithful data, but CODE-STYLE HEADERS):
@@ -136,7 +137,7 @@ def prepare_meta_training_dataset(
         col = _as_int_safely(col)
         A_cols.append(col.reshape(-1, 1))
 
-        # ✅ CHANGED: 0-based x index in label (NO +1)
+        # 0-based x index in label (NO +1)
         headers.append(f"ai{j}(x{fidx})")
 
     A = np.hstack(A_cols).astype(int)

@@ -122,11 +122,6 @@ def _random_quant_value(col: np.ndarray, rng: np.random.Generator) -> float:
         uniq = np.unique(np.round(col).astype(int))
         return float(rng.choice(uniq))
 
-        # Alternative (also valid): random int between min/max inclusive
-        # mn = int(np.min(uniq))
-        # mx = int(np.max(uniq))
-        # return float(rng.integers(mn, mx + 1))
-
     # Otherwise generate float
     mn = float(np.min(col))
     mx = float(np.max(col))

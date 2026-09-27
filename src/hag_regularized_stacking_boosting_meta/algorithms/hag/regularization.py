@@ -76,18 +76,15 @@ def update_R(
 
     So we apply regularization TWICE.
     """
-    base = np.asarray(R, dtype=float) + np.asarray(eta_feature, dtype=float)
-
-    # First correction -> Excel column H
-    H = apply_regularization(base, y, alpha, majorizer, k1_label, k2_label)
+    # First correction -> Excel column H (the Step-3 candidate)
+    H = build_bt_candidate(R, eta_feature, y, alpha, majorizer, k1_label, k2_label)
 
     # Second correction -> Excel column I (next organizer)
-    I = apply_regularization(H, y, alpha, majorizer, k1_label, k2_label)  # noqa: E741 (Excel column I)
-    return I
+    return apply_regularization(H, y, alpha, majorizer, k1_label, k2_label)
 
 
 # -------------------------------------------------------------------
-# Debug helpers (optional but useful)
+# Debug helper (Excel column printout)
 # -------------------------------------------------------------------
 
 def build_bt_candidate_debug(
@@ -111,8 +108,7 @@ def build_bt_candidate_debug(
     y = np.asarray(y).astype(int).reshape(-1)
 
     F = R + eta
-    sign = _class_sign(y, k1_label, k2_label)
-    H = F + (sign * float(alpha)) * majorizer(-F)
+    H = apply_regularization(F, y, alpha, majorizer, k1_label, k2_label)
 
     return {
         "B_R": R,
@@ -120,29 +116,4 @@ def build_bt_candidate_debug(
         "F_base_bt": F,
         "H_bt_final": H,
     }
-
-
-def build_step4_debug(
-    R: np.ndarray,
-    eta_feature: np.ndarray,
-    y: np.ndarray,
-    alpha: float,
-    majorizer: MajorizingFn,
-    k1_label: int,
-    k2_label: int,
-) -> Dict[str, np.ndarray]:
-    """
-    Excel Step-4 debug:
-      H = first corrected vector (bt(sigm))
-      I = second corrected vector (R(S^{...})(sigm)) -> organizer for next loop
-    """
-    R = np.asarray(R, dtype=float).reshape(-1)
-    eta = np.asarray(eta_feature, dtype=float).reshape(-1)
-    y = np.asarray(y).astype(int).reshape(-1)
-
-    F = R + eta
-    H = apply_regularization(F, y, alpha, majorizer, k1_label, k2_label)
-    I = apply_regularization(H, y, alpha, majorizer, k1_label, k2_label)  # noqa: E741 (Excel column I)
-
-    return {"F": F, "H": H, "I": I}
 

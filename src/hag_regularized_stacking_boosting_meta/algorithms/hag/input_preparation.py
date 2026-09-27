@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import numpy as np
 
-from .weights import build_quantitative_nominalization
-
-# Nominal is optional (project must remain importable if nominal not implemented yet)
-try:
-    from .weights import build_nominal_contributions  # type: ignore
-    _NOMINAL_AVAILABLE = True
-except Exception:
-    build_nominal_contributions = None  # type: ignore
-    _NOMINAL_AVAILABLE = False
+from .weights import (
+    NominalWeightsResult,
+    QuantitativePipelineResult,
+    build_nominal_contributions,
+    build_quantitative_nominalization,
+)
 
 
 @dataclass(frozen=True)
@@ -33,15 +30,6 @@ class HAGPrepResult:
     weight_sorted_feature_idx: List[int]
     weight_rank_per_feature: List[int]
 
-    # Backward/forward-compatible aliases (some scripts used older names)
-    @property
-    def weight_sorted_idx(self) -> List[int]:
-        return self.weight_sorted_feature_idx
-
-    @property
-    def weight_rank_per_feature_index(self) -> List[int]:
-        return self.weight_rank_per_feature
-
 
 def _stable_sort_desc_with_left_to_right_ties(w: np.ndarray) -> np.ndarray:
     """
@@ -60,8 +48,8 @@ def prepare_hag_inputs(
     quantitative_idx: Optional[List[int]] = None,
     nominal_idx: Optional[List[int]] = None,
     *,
-    quantitative_result: Optional[Any] = None,
-    nominal_result: Optional[Any] = None,
+    quantitative_result: Optional[QuantitativePipelineResult] = None,
+    nominal_result: Optional[NominalWeightsResult] = None,
 ) -> HAGPrepResult:
     """
     Build:
@@ -121,13 +109,6 @@ def prepare_hag_inputs(
     # Nominal block
     # -------------------------
     if nominal_idx:
-        if not _NOMINAL_AVAILABLE or build_nominal_contributions is None:
-            raise RuntimeError(
-                "Nominal features exist in dataset, but weights_nominal.py API is not available.\n"
-                "Create algorithms/hag/weights_nominal.py with build_nominal_contributions(), "
-                "or run on a purely-quantitative dataset."
-            )
-
         nres = nominal_result
         if nres is None:
             nres = build_nominal_contributions(X, y, nominal_idx)
@@ -136,9 +117,9 @@ def prepare_hag_inputs(
         for j, fidx in enumerate(nres.nominal_idx):
             X_contrib_full[:, fidx] = nres.contribution_X[:, j]
 
-        # Nominal weights live in nres.w_c dict[fidx] -> weight
+        # weight_wc is dict[fidx] -> weight
         for fidx in nres.nominal_idx:
-            w_full[fidx] = float(nres.w_c[fidx])
+            w_full[fidx] = float(nres.weight_wc[fidx])
 
     # -------------------------
     # Sorting / Ranking

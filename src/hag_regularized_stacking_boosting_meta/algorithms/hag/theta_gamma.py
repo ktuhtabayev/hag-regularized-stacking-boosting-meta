@@ -51,6 +51,17 @@ def theta_gamma_from_bt(
     return ThetaGammaResult(m1=m1, m2=m2, theta=theta, gamma=gamma, ratio=ratio)
 
 
+def _running_sum(terms: np.ndarray) -> np.ndarray:
+    """
+    Running sum s_t = (((0 + a_0) + a_1) + ... + a_t), column-wise.
+
+    np.cumsum accumulates strictly left to right, and the leading 0 reproduces the
+    `s = 0.0; s += a_t` loop exactly (bit for bit, including the first element).
+    """
+    zeros = np.zeros((1,) + terms.shape[1:], dtype=float)
+    return np.cumsum(np.concatenate([zeros, terms]), axis=0)[1:]
+
+
 def excel_step3_trace_from_bt(
     bt_final: np.ndarray,
     y: np.ndarray,
@@ -92,40 +103,23 @@ def excel_step3_trace_from_bt(
             "O_ratio_final": inf,
         }
 
-    I = np.zeros(m, dtype=float)  # noqa: E741 (Excel column I)
-    J = np.zeros(m, dtype=float)
-    K = np.zeros(m, dtype=float)
-    L = np.zeros(m, dtype=float)
-    M_theta = np.zeros(m, dtype=float)
-    N_gamma = np.zeros(m, dtype=float)
+    # Objects are visited in dataset order t = 0..m-1; a class-K1 object adds to the
+    # K1 running sum, a K2 object to the K2 one, any other label to neither.
+    in_k1 = mask1
+    in_k2 = mask2 & ~mask1  # K1 is checked first
+    I = _running_sum(np.where(in_k1, h, 0.0))  # noqa: E741 (Excel column I)
+    J = _running_sum(np.where(in_k2, h, 0.0))
+    K = I / cnt1
+    L = J / cnt2
 
-    s1 = 0.0
-    s2 = 0.0
-    th = 0.0
-    ga = 0.0
+    # θ: distance to the own class running mean, γ: to the other class running mean
+    to_k1 = np.abs(h - K)
+    to_k2 = np.abs(h - L)
+    M_theta = _running_sum(np.where(in_k1, to_k1, np.where(in_k2, to_k2, 0.0)))
+    N_gamma = _running_sum(np.where(in_k1, to_k2, np.where(in_k2, to_k1, 0.0)))
 
-    for t in range(m):
-        if y[t] == int(k1_label):
-            s1 += h[t]
-        elif y[t] == int(k2_label):
-            s2 += h[t]
-
-        I[t] = s1
-        J[t] = s2
-
-        K[t] = s1 / cnt1
-        L[t] = s2 / cnt2
-
-        if y[t] == int(k1_label):
-            th += abs(h[t] - K[t])
-            ga += abs(h[t] - L[t])
-        elif y[t] == int(k2_label):
-            th += abs(h[t] - L[t])
-            ga += abs(h[t] - K[t])
-
-        M_theta[t] = th
-        N_gamma[t] = ga
-
+    th = M_theta[-1] if m else 0.0
+    ga = N_gamma[-1] if m else 0.0
     ratio = float("inf") if abs(ga) < eps else (th / ga)
     return {
         "I_M1_sum": I,

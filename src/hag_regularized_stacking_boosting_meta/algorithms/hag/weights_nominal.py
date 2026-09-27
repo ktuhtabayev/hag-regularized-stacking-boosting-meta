@@ -38,26 +38,6 @@ class NominalWeightsResult:
     # shape: (m, len(nominal_idx))
     contribution_X: np.ndarray
 
-    # ----------------------------
-    # Backward-compatible aliases
-    # (so older code doesn't break)
-    # ----------------------------
-    @property
-    def w_c(self) -> Dict[int, float]:
-        return self.weight_wc
-
-    @property
-    def d1_c(self) -> Dict[int, int]:
-        return self.D1_c
-
-    @property
-    def d2_c(self) -> Dict[int, int]:
-        return self.D2_c
-
-    @property
-    def eta_c(self) -> Dict[int, Dict[float, float]]:
-        return self.contributions_eta
-
 
 # ============================================================
 # Helpers
@@ -78,30 +58,25 @@ def _validate_binary_classes(y: np.ndarray) -> Tuple[int, int]:
     return k1, k2
 
 
-def _counts_by_class_for_column(col: np.ndarray, y: np.ndarray) -> Tuple[Dict[float, int], Dict[float, int]]:
+def _counts_by_class_for_column(
+    col: np.ndarray, y: np.ndarray
+) -> Tuple[Dict[float, int], Dict[float, int], np.ndarray]:
     """
-    Build counts of each gradation value for class K1 and K2.
-    Keeps keys as float for consistency (works for int-valued nominal too).
+    Build counts of each gradation value for class K1 and K2 (every gradation appears
+    in both dicts, sorted by value). Keys are floats (works for int-valued nominal too).
+
+    Also returns, per object, the position of its value among the sorted gradations.
     """
-    g1: Dict[float, int] = {}
-    g2: Dict[float, int] = {}
-    for v, cls in zip(col, y):
-        key = float(v)
-        if cls == 1:
-            g1[key] = g1.get(key, 0) + 1
-        else:
-            g2[key] = g2.get(key, 0) + 1
+    gradations, position = np.unique(np.asarray(col, dtype=float), return_inverse=True)
+    position = position.reshape(-1)
+    in_k1 = np.asarray(y) == 1
+    count1 = np.bincount(position[in_k1], minlength=gradations.shape[0])
+    count2 = np.bincount(position[~in_k1], minlength=gradations.shape[0])
 
-    # Ensure same keys appear in both dicts
-    all_keys = set(g1.keys()) | set(g2.keys())
-    for k in all_keys:
-        g1.setdefault(k, 0)
-        g2.setdefault(k, 0)
-
-    # Return sorted dicts (by gradation value)
-    g1_sorted = {k: g1[k] for k in sorted(all_keys)}
-    g2_sorted = {k: g2[k] for k in sorted(all_keys)}
-    return g1_sorted, g2_sorted
+    keys = [float(v) for v in gradations]
+    g1 = {key: int(c) for key, c in zip(keys, count1)}
+    g2 = {key: int(c) for key, c in zip(keys, count2)}
+    return g1, g2, position
 
 
 def _lambda_beta_weight(
@@ -231,9 +206,7 @@ def build_nominal_contributions(
     contrib = np.zeros((m, len(nominal_idx)), dtype=float)
 
     for out_j, fidx in enumerate(nominal_idx):
-        col = X[:, fidx]
-
-        g1, g2 = _counts_by_class_for_column(col, y)
+        g1, g2, position = _counts_by_class_for_column(X[:, fidx], y)
 
         # l1/l2: number of gradations present in each class (non-zero)
         l1 = sum(1 for v in g1.values() if v > 0)
@@ -259,9 +232,7 @@ def build_nominal_contributions(
         contributions_eta[fidx] = eta
 
         # map each row nominal value to eta(value)
-        for i in range(m):
-            key = float(col[i])
-            contrib[i, out_j] = eta[key]
+        contrib[:, out_j] = np.asarray(list(eta.values()), dtype=float)[position]
 
     return NominalWeightsResult(
         nominal_idx=list(nominal_idx),

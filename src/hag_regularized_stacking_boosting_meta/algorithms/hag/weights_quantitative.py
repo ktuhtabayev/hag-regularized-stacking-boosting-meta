@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
+
+
+# Consecutive sorted values closer than this are one value: no split between them
+SAME_VALUE_TOLERANCE = 1e-8
 
 
 # ============================================================
@@ -17,14 +21,6 @@ class Criterion1Result:
     pi1: float
     pi2: float
     pi3: float
-
-
-@dataclass(frozen=True)
-class QuantFeatureBinarization:
-    """Binarization info for one quantitative feature (Formula 3)."""
-    gamma_c: float                     # Γ_c threshold
-    b_value: float                     # nearest value to π2 from (π2; π3)
-    binary_values: np.ndarray          # shape (m,), values {1,2}
 
 
 @dataclass(frozen=True)
@@ -63,55 +59,53 @@ class QuantitativePipelineResult:
 # Core math: Criterion-1 (Formula 2)
 # ============================================================
 
-def criterion_1(column: List[float], target: List[int]) -> Criterion1Result:
+def criterion_1(column: Sequence[float], target: Sequence[int]) -> Criterion1Result:
     """
     Criterion-1 (Formula 2): returns weight ω_c and (π1, π2, π3).
 
     Input:
       column: feature values for all objects
       target: class labels for all objects (1 or 2)
+
+    Objects are sorted by value (stable) and every split between distinct values
+    ("boundary" = size of the left part) is scored; the first best split gives π2.
+    Class counts per split come from prefix sums, so all splits cost O(m log m).
     """
-    if len(column) != len(target):
+    values = np.asarray(column, dtype=float).reshape(-1)
+    labels = np.asarray(target).reshape(-1)
+    if values.shape[0] != labels.shape[0]:
         raise ValueError("column and target must have same length")
-    if len(column) == 0:
+    if values.shape[0] == 0:
         raise ValueError("empty column")
 
-    K1 = target.count(1)
-    K2 = target.count(2)
+    K1 = int(np.count_nonzero(labels == 1))
+    K2 = int(np.count_nonzero(labels == 2))
     if K1 == 0 or K2 == 0:
         raise ValueError("Both classes must exist (need K1>0 and K2>0).")
 
-    pairs = [[column[i], target[i]] for i in range(len(target))]
-    pairs.sort(key=lambda x: x[0])
+    order = np.argsort(values, kind="stable")
+    column_sorted = values[order]
+    target_sorted = labels[order]
 
-    column_sorted = [pairs[i][0] for i in range(len(target))]
-    target_sorted = [pairs[i][1] for i in range(len(target))]
+    # Boundary b (1..m) splits after column_sorted[b-1]; skip it when the next value is the same
+    splits = np.ones(column_sorted.shape[0], dtype=bool)
+    splits[:-1] = ~(np.abs(np.diff(column_sorted)) < SAME_VALUE_TOLERANCE)
+    last_left = np.flatnonzero(splits)  # = boundary - 1
+
+    left_K1 = np.cumsum(target_sorted == 1, dtype=np.int64)[last_left]
+    left_K2 = np.cumsum(target_sorted == 2, dtype=np.int64)[last_left]
+    right_K1 = K1 - left_K1
+    right_K2 = K2 - left_K2
 
     best_score = float("-inf")
     best_pi2 = column_sorted[0]
 
-    for boundary in range(1, len(column_sorted) + 1):
-        # If boundary doesn't change value -> skip (no new split)
-        if boundary != len(column_sorted) and abs(column_sorted[boundary] - column_sorted[boundary - 1]) < 1e-8:
-            continue
-
-        left = target_sorted[:boundary]
-        right = target_sorted[boundary:]
-
-        left_K1 = sum(1 for el in left if el == 1)
-        left_K2 = sum(1 for el in left if el == 2)
-
-        right_K1 = sum(1 for el in right if el == 1)
-        right_K2 = sum(1 for el in right if el == 2)
-
+    left_denom = (K1**2 - K1) + (K2**2 - K2)
+    if left_denom != 0:
         left_numer = (
             (left_K1**2 - left_K1) + (right_K1**2 - right_K1) +
             (left_K2**2 - left_K2) + (right_K2**2 - right_K2)
         )
-        left_denom = (K1**2 - K1) + (K2**2 - K2)
-        if left_denom == 0:
-            continue
-
         right_numer = (
             left_K1 * (K2 - left_K2) +
             left_K2 * (K1 - left_K1) +
@@ -119,18 +113,16 @@ def criterion_1(column: List[float], target: List[int]) -> Criterion1Result:
             right_K2 * (K1 - right_K1)
         )
         right_denom = 2 * K1 * K2
-        if right_denom == 0:
-            continue
+        scores = (left_numer / left_denom) * (right_numer / right_denom)
 
-        score = (left_numer / left_denom) * (right_numer / right_denom)
+        best = int(np.argmax(scores))  # first maximum = first strictly better split
+        best_score = scores[best]
+        best_pi2 = column_sorted[last_left[best]]
 
-        if score > best_score:
-            best_score = score
-            best_pi2 = column_sorted[boundary - 1]
-
-    pi1 = float(min(column_sorted))
+    sorted_list = column_sorted.tolist()
+    pi1 = float(min(sorted_list))
     pi2 = float(best_pi2)
-    pi3 = float(max(column_sorted))
+    pi3 = float(max(sorted_list))
 
     return Criterion1Result(weight_wc=float(best_score), pi1=pi1, pi2=pi2, pi3=pi3)
 
@@ -247,14 +239,13 @@ def build_quantitative_nominalization(
 
     for feat_idx in quantitative_idx:
         col = X[:, feat_idx].astype(float)
-        y_list = y.astype(int).tolist()
 
-        c1 = criterion_1(col.tolist(), y_list)
+        c1 = criterion_1(col, y.astype(int))
         weights_wc[feat_idx] = c1.weight_wc
         pi_table[feat_idx] = (c1.pi1, c1.pi2, c1.pi3)
 
         sorted_vals = np.sort(col)
-        gamma_c, b_val = compute_gamma_c(sorted_vals, c1.pi2, c1.pi3)
+        gamma_c, _b = compute_gamma_c(sorted_vals, c1.pi2, c1.pi3)
         gamma[feat_idx] = gamma_c
 
         bin_col = binarize_by_gamma(col, gamma_c)

@@ -77,27 +77,27 @@ def greedy_hag_grouping(
     tuplam: List[int] = [u]
     R = X[:, u].astype(float, copy=True)  # organizer vector
 
-    cr1 = float(params.cr1)
+    alpha = float(params.alpha)
+    k1_label = int(params.k1_label)
+    k2_label = int(params.k2_label)
 
     r_step4_history: List[np.ndarray] = []
     crit_history: List[float] = []
     candidate_history: List[Dict[int, float]] = []
 
-    while True:
-        if not P:
-            break
-
+    while P:
+        # every Step 3 starts from the same cr1 bound
         sel = choose_next_feature_q(
             X=X,
             y=y,
             R=R,
             P=P,
-            alpha=float(params.alpha),
+            alpha=alpha,
             majorizer=majorizer,
-            k1_label=int(params.k1_label),
-            k2_label=int(params.k2_label),
-            cr1_init=cr1,
-            debug=None if verbose else False,
+            k1_label=k1_label,
+            k2_label=k2_label,
+            cr1_init=float(params.cr1),
+            debug=verbose,
         )
         q = int(sel.q)
         crit = float(sel.best_ratio)
@@ -108,18 +108,15 @@ def greedy_hag_grouping(
         P.remove(q)
         tuplam.append(q)
 
-        # reset cr1 for next iteration
-        cr1 = float(params.cr1)
-
-        # IMPORTANT: update_R now returns Excel column I (organizer for next loop)
+        # IMPORTANT: update_R returns Excel column I (organizer for next loop)
         R = update_R(
             R=R,
             eta_feature=X[:, q],
             y=y,
-            alpha=float(params.alpha),
+            alpha=alpha,
             majorizer=majorizer,
-            k1_label=int(params.k1_label),
-            k2_label=int(params.k2_label),
+            k1_label=k1_label,
+            k2_label=k2_label,
         )
 
         # Unbounded majorizers (exponential, quadratic) can blow up across iterations
