@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,8 @@ class HAGParams:
 
     Important:
     - Excel uses 1-based indices; code uses 0-based.
-    - weights are used ONLY ONCE to select organizer (unless organizer_index is forced).
+    - weights are used ONLY ONCE to select the organizer: the feature with the highest weight
+      (x3 in Excel -> index 2 on the default dataset).
     """
     alpha: float = 0.3
     delta: float = 0.1
@@ -31,8 +32,5 @@ class HAGParams:
 
     k1_label: int = 1
     k2_label: int = 2
-
-    # None = feature with the highest weight (x3 in Excel -> index 2 on the default dataset).
-    organizer_index: Optional[int] = None
 
     majorizing: MajorizingConfig = field(default_factory=MajorizingConfig)

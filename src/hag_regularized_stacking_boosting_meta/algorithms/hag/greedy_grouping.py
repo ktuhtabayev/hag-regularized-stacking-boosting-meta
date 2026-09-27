@@ -49,7 +49,7 @@ def greedy_hag_grouping(
 
     Excel-faithful rules:
     - Do NOT reorder X columns. Keep original dataset feature order.
-    - weights used ONLY ONCE to find organizer u (unless organizer_index is forced).
+    - weights used ONLY ONCE to find organizer u (the feature with the highest weight).
     - Step 3 scans: x0, x1, x3, x4, ... (skip organizer and already-selected).
     - Step 4 organizer update uses Excel I column:
         I = H + sign*alpha*sigmoid(-H)
@@ -67,14 +67,8 @@ def greedy_hag_grouping(
     if verbose:
         print("MAJOR:", params.majorizing.name, params.majorizing.params)
 
-    # Organizer selection (ONLY ONCE)
-    if params.organizer_index is not None:
-        u = int(params.organizer_index)
-        if u < 0 or u >= n:
-            raise ValueError(f"organizer_index={u} out of range for n={n}")
-    else:
-        ranked = rank_features_by_weight(weights)
-        u = int(ranked[0])
+    # Organizer selection (ONLY ONCE): the feature with the highest weight
+    u = int(rank_features_by_weight(weights)[0])
 
     # Candidate pool in ORIGINAL index order excluding organizer
     P = [i for i in range(n) if i != u]

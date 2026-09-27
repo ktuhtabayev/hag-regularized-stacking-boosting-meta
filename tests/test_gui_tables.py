@@ -14,7 +14,6 @@ from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QHeaderView  # noqa: E402
 
 from hag_regularized_stacking_boosting_meta.gui.app import (  # noqa: E402
-    ORGANIZER_AUTO,
     MainWindow,
     frame_to_table,
     parse_majorizer_params,
@@ -103,7 +102,8 @@ def test_parameter_controls_initialize_from_config(app) -> None:
     assert window.alpha.value() == pytest.approx(0.3)
     assert window.delta.value() == pytest.approx(0.1)
     assert window.kappa.value() == 15
-    assert window.organizer.value() == ORGANIZER_AUTO
+    assert window.organizer.isReadOnly() and window.organizer.text() == ""
+    assert window.organizer.placeholderText() == "Auto (max ω)"
     assert window.majorizer.currentText() == "sigmoid"
     assert parse_majorizer_params(window.majorizer_params.text()) == {"k": 1.0, "x0": 0.0}
     assert window.dataset_preset.currentText() == "default_csv"
@@ -113,16 +113,13 @@ def test_controls_build_the_run_config(app) -> None:
     window = MainWindow(ROOT, restore_settings=False)
     window.alpha.setValue(0.25)
     window.kappa.setValue(5)
-    window.organizer.setValue(ORGANIZER_AUTO)
     window.majorizer.setCurrentText("quadratic")
     window._on_majorizer_selected(window.majorizer.currentIndex())
 
     cfg = window._config_from_controls()
 
-    assert window.organizer.text() == "Auto (max ω)"
     assert cfg.hag.alpha == pytest.approx(0.25)
     assert cfg.hag.kappa == 5
-    assert cfg.hag.organizer_index is None
     assert cfg.hag.majorizing.name == "quadratic"
     assert cfg.hag.majorizing.params == {"a": 1.0, "b": 0.0, "c": 0.0}
     assert cfg.dataset.path == str(Path("datasets") / "raw" / "default.csv")
@@ -145,25 +142,50 @@ def test_dataset_preset_dropdown_fills_path_and_tracks_custom_edits(app) -> None
     assert preset_names[0] == "Custom..."
     assert "heart_disease_270_csv" in preset_names
 
-    # a forced organizer index belongs to the previous dataset
-    window.organizer.setValue(2)
     row = preset_names.index("cancer_nominal_dat")
     window.dataset_preset.setCurrentIndex(row)
     window._on_dataset_preset_selected(row)
     assert window.dataset_path.text().endswith("Cancer-N (589, 44, 2).dat")
-    assert window.organizer.value() == ORGANIZER_AUTO
-
-    window.organizer.setValue(2)
-    window._on_dataset_preset_selected(row)  # same dataset again keeps the choice
-    assert window.organizer.value() == 2
-    window._on_dataset_path_edited("")
-    assert window.organizer.value() == ORGANIZER_AUTO
 
     window.dataset_path.setText(str(ROOT / "datasets" / "nonexistent.csv"))
     window._sync_preset_to_path()
     assert window.dataset_preset.currentText() == "Custom..."
     with pytest.raises(ValueError, match="not found"):
         window._config_from_controls()
+
+
+def test_organizer_shows_the_last_run_and_clears_for_another_dataset(app, default_result) -> None:
+    window = MainWindow(ROOT, restore_settings=False)
+    window._on_pipeline_finished((default_result, None))
+    assert window.organizer.text() == f"x{default_result.hag.organizer}" == "x2"
+
+    preset_names = [window.dataset_preset.itemText(i) for i in range(window.dataset_preset.count())]
+    window._on_dataset_preset_selected(preset_names.index("default_csv"))  # same dataset keeps it
+    assert window.organizer.text() == "x2"
+    window._on_dataset_preset_selected(preset_names.index("cancer_nominal_dat"))
+    assert window.organizer.text() == ""
+
+    window._on_pipeline_finished((default_result, None))
+    window._on_dataset_path_edited("")
+    assert window.organizer.text() == ""
+
+
+def test_organizer_is_the_leftmost_parameter_and_follows_every_run(app, default_result) -> None:
+    window = MainWindow(ROOT, restore_settings=False)
+    row = window.centralWidget().layout().itemAt(1).layout()
+    assert row.itemAt(0).widget().text() == "Organizer"
+    assert row.itemAt(1).widget() is window.organizer
+    assert row.itemAt(3).widget() is window.alpha
+
+    # same dataset, new hyperparameters: the box shows the organizer of the new run
+    window._on_pipeline_finished((default_result, None))
+    window.alpha.setValue(1.0)
+    window.kappa.setValue(5)
+    window.majorizer.setCurrentText("identity")
+    window._on_majorizer_selected(window.majorizer.currentIndex())
+    rerun = run_pipeline(window._config_from_controls(), project_root=ROOT)
+    window._on_pipeline_finished((rerun, None))
+    assert window.organizer.text() == f"x{rerun.hag.organizer}"
 
 
 def test_result_tabs_and_new_object_classification(app, default_result) -> None:

@@ -46,11 +46,9 @@ hag:
   k1_label: 1
   k2_label: 2
 
-  # Organizer u (0-based feature index) used for the whole HAG run.
-  # null = automatic: the feature with the highest weight ω of the chosen dataset.
-  # On default.csv / default.dat that is index 2 (x3 in Excel), reproducing the Excel experiment.
-  # An index forces that feature on every dataset.
-  organizer_index: null
+  # The organizer u is not configured: HAG always starts from the feature with the
+  # highest weight ω of the chosen dataset. On default.csv / default.dat that is
+  # index 2 (x3 in Excel), reproducing the Excel experiment.
 
   # ==========================================================
   # Majorizing function f(x) (config-driven)

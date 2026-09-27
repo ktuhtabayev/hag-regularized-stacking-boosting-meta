@@ -77,10 +77,6 @@ def load_default_config(path: str | Path) -> RunConfig:
     # --------------------------
     # HAGParams
     # --------------------------
-    # organizer_index: missing or null -> auto (max weight), integer -> forced feature index
-    organizer_raw = _get(hag_raw, "organizer_index", HAGParams.organizer_index)
-    organizer_index = None if organizer_raw is None else int(organizer_raw)
-
     hag = HAGParams(
         alpha=float(_get(hag_raw, "alpha", 0.3)),
         delta=float(_get(hag_raw, "delta", 0.1)),
@@ -88,7 +84,6 @@ def load_default_config(path: str | Path) -> RunConfig:
         cr1=float(_get(hag_raw, "cr1", 10.0)),
         k1_label=int(_get(hag_raw, "k1_label", 1)),
         k2_label=int(_get(hag_raw, "k2_label", 2)),
-        organizer_index=organizer_index,
         majorizing=majorizing,
     )
 

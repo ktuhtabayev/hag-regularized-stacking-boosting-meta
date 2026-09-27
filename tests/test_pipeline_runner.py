@@ -15,6 +15,7 @@ from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation imp
 from hag_regularized_stacking_boosting_meta.algorithms.meta.training_set import (
     prepare_meta_training_dataset,
 )
+from hag_regularized_stacking_boosting_meta.domain.params import MajorizingConfig
 from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
 from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
 from hag_regularized_stacking_boosting_meta.io.writers import write_pipeline_outputs
@@ -47,7 +48,7 @@ def test_default_run_reproduces_the_excel_experiment(default_result) -> None:
     assert criterion1.loc["x0", "Weight ω"] == pytest.approx(0.634921, abs=1e-6)
 
     # Excel: organizer x3 (index 2), first winner x6 (index 5) with cr1 = 0.355663879
-    assert r.hag.organizer == 2
+    assert r.hag.organizer == 2 == r.prep.weight_sorted_feature_idx[0]
     assert r.hag.tuplam[:2] == [2, 5]
     assert r.hag.crit_history[0] == pytest.approx(0.355663879, abs=1e-9)
 
@@ -63,13 +64,29 @@ def test_default_run_reproduces_the_excel_experiment(default_result) -> None:
         ("datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).csv", 12),
     ],
 )
-def test_default_organizer_is_the_top_weight_feature_of_the_chosen_dataset(
+def test_organizer_is_the_top_weight_feature_of_the_chosen_dataset(
     dataset: str, organizer: int
 ) -> None:
     cfg = load_default_config(CONFIG)
     r = run_pipeline(replace(cfg, dataset=replace(cfg.dataset, path=dataset)), project_root=ROOT)
     assert r.hag.organizer == organizer == int(np.argmax(r.prep.w_full))
     assert r.hag.tuplam[0] == organizer
+
+
+@pytest.mark.parametrize(
+    "hag_overrides",
+    [
+        {"alpha": 0.05},
+        {"alpha": 3.0, "delta": 0.5},
+        {"kappa": 2},
+        {"majorizing": MajorizingConfig(name="identity", params={})},
+    ],
+)
+def test_organizer_depends_on_the_dataset_only(hag_overrides) -> None:
+    # ω comes from the data before HAG runs, so α, δ, κ and f cannot move the organizer
+    cfg = _config(**hag_overrides)
+    cfg = replace(cfg, dataset=replace(cfg.dataset, path="datasets/raw/Cancer/Cancer (589, 44, 2).dat"))
+    assert run_pipeline(cfg, project_root=ROOT).hag.organizer == 0
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -153,12 +170,6 @@ def test_random_new_object_is_reproducible_and_binarized_by_gamma(default_result
             assert binary == (1 if value <= r.gamma_map[fidx] else 2)
         else:
             assert binary == value
-
-
-def test_organizer_auto_uses_the_highest_weight() -> None:
-    r = run_pipeline(_config(organizer_index=None), project_root=ROOT)
-    assert r.hag.organizer == r.prep.weight_sorted_feature_idx[0]
-    assert r.hag.tuplam[0] == r.hag.organizer
 
 
 def test_write_pipeline_outputs(tmp_path: Path, default_result) -> None:

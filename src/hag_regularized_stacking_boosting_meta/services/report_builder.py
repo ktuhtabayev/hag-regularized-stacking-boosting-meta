@@ -413,7 +413,6 @@ def run_summary(result: PipelineResult) -> Dict[str, object]:
             "delta": float(params.delta),
             "kappa": int(params.kappa),
             "cr1": float(params.cr1),
-            "organizer_index": params.organizer_index,
             "majorizing": {
                 "name": str(params.majorizing.name),
                 "params": dict(params.majorizing.params or {}),

@@ -91,7 +91,6 @@ MAJORIZER_PRESETS: Dict[str, Dict[str, Any]] = {
 MAX_SET_IDS_SHOWN = 40
 RESIZE_SAMPLE_ROWS = 100
 MARGIN_ANIMATION_MS = 900
-ORGANIZER_AUTO = -1
 
 
 def format_majorizer_params(params: Dict[str, Any]) -> str:
@@ -358,12 +357,15 @@ class MainWindow(QMainWindow):
         self.kappa.setRange(1, 999)
         self.kappa.setToolTip("κ: HAG stops when |TUPLAM| reaches κ")
 
-        self.organizer = QSpinBox()
-        self.organizer.setRange(ORGANIZER_AUTO, 9999)
-        self.organizer.setSpecialValueText("Auto (max ω)")
-        self.organizer.setPrefix("x")
+        # Read-only statistic: HAG picks the organizer itself (feature with the highest weight ω)
+        self.organizer = QLineEdit()
+        self.organizer.setReadOnly(True)
+        self.organizer.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.organizer.setPlaceholderText("Auto (max ω)")
+        self.organizer.setMaximumWidth(120)
         self.organizer.setToolTip(
-            "Organizer u (0-based feature index). Auto = feature with the highest weight ω."
+            "Organizer u (0-based feature index): the feature with the highest weight ω, "
+            "found by the last Run on the chosen dataset."
         )
 
         self.majorizer = QComboBox()
@@ -394,10 +396,10 @@ class MainWindow(QMainWindow):
 
         params = QHBoxLayout()
         for label, widget in (
+            ("Organizer", self.organizer),
             ("α", self.alpha),
             ("δ", self.delta),
             ("κ", self.kappa),
-            ("Organizer", self.organizer),
             ("Majorizer f", self.majorizer),
         ):
             params.addWidget(QLabel(label))
@@ -427,8 +429,7 @@ class MainWindow(QMainWindow):
         self.alpha.setValue(float(cfg.hag.alpha))
         self.delta.setValue(float(cfg.hag.delta))
         self.kappa.setValue(int(cfg.hag.kappa))
-        organizer = cfg.hag.organizer_index
-        self.organizer.setValue(ORGANIZER_AUTO if organizer is None else int(organizer))
+        self.organizer.clear()
         name = str(cfg.hag.majorizing.name)
         if self.majorizer.findText(name) < 0:
             self.majorizer.addItem(name)
@@ -463,13 +464,13 @@ class MainWindow(QMainWindow):
         self._set_dataset_path(str(self.project_root / str(entry["path"])))
 
     def _on_dataset_path_edited(self, _text: str) -> None:
-        self.organizer.setValue(ORGANIZER_AUTO)
+        self.organizer.clear()
         self._sync_preset_to_path()
 
     def _set_dataset_path(self, path: str) -> None:
-        """A forced organizer index belongs to the previous dataset, so a new one starts at Auto (max ω)."""
+        """The organizer shown belongs to the last run's dataset, so another dataset clears it until Run."""
         if path != self.dataset_path.text().strip():
-            self.organizer.setValue(ORGANIZER_AUTO)
+            self.organizer.clear()
         self.dataset_path.setText(path)
 
     def _sync_preset_to_path(self) -> None:
@@ -522,13 +523,11 @@ class MainWindow(QMainWindow):
         if not np.all(np.isfinite(probe)):
             raise ValueError("Majorizing function returns non-finite values for x in [-1, 1].")
 
-        organizer = self.organizer.value()
         hag = replace(
             cfg.hag,
             alpha=float(self.alpha.value()),
             delta=float(self.delta.value()),
             kappa=int(self.kappa.value()),
-            organizer_index=None if organizer == ORGANIZER_AUTO else int(organizer),
             majorizing=majorizing,
         )
         return replace(cfg, dataset=dataset, hag=hag)
@@ -565,6 +564,7 @@ class MainWindow(QMainWindow):
         result, output_dir = payload
         self.last_result = result
         self.last_output_dir = output_dir
+        self.organizer.setText(f"x{result.hag.organizer}")
         self.populate_tabs(result)
         self.open_output_button.setEnabled(True)
         self.status_text.setPlainText(self._status_summary(result, output_dir))
@@ -927,7 +927,6 @@ class MainWindow(QMainWindow):
         snew = result.new_object
         k1 = int(np.sum(ds.y == result.k1_label))
         k2 = int(np.sum(ds.y == result.k2_label))
-        organizer = "auto (max ω)" if params.organizer_index is None else f"x{params.organizer_index}"
         tuplam = ", ".join(f"x{i}" for i in result.hag.tuplam)
         output_text = str(output_dir) if output_dir is not None else "Not exported"
         return (
@@ -936,7 +935,7 @@ class MainWindow(QMainWindow):
             f"Objects: {ds.X.shape[0]} (|K1| = {k1}, |K2| = {k2})   Features: {ds.X.shape[1]} "
             f"({len(ds.quantitative_idx)} quantitative, {len(ds.nominal_idx)} nominal)\n"
             f"HAG: α = {params.alpha:g}, δ = {params.delta:g}, κ = {params.kappa}, "
-            f"organizer = {organizer} → u = x{result.hag.organizer}, "
+            f"organizer u = x{result.hag.organizer} (max ω), "
             f"f = {params.majorizing.name}({format_majorizer_params(dict(params.majorizing.params or {}))})\n"
             f"TUPLAM: [{tuplam}]   (p = {result.hag.p} latent features)\n"
             f"Snew [{snew.source}] ∈ {rb.class_name(snew.prediction.predicted_label, result)}   "

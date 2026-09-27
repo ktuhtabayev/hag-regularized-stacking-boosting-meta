@@ -95,15 +95,15 @@ configs/default.yaml
 ```
 
 - `dataset`: active dataset path (`format: auto` picks the loader from the file extension)
-- `hag`: α (`alpha`), δ (`delta`), κ (`kappa`), `cr1`, class labels, `organizer_index`,
+- `hag`: α (`alpha`), δ (`delta`), κ (`kappa`), `cr1`, class labels,
   and the majorizing function `f` (`majorizing.name` + `majorizing.params`)
 - `seed`: seed of the random new object `Snew`
 - `dataset_catalog`: dataset presets shown in the GUI dropdown
 
-`organizer_index: null` (the default) uses the feature with the highest weight ω of
-the chosen dataset; on the default dataset that is index 2 (x3 in Excel), which
-reproduces the Excel experiment. An integer forces that feature index on every dataset.
-The GUI resets the organizer to *Auto* whenever another dataset is chosen.
+The organizer u is not a parameter: HAG always starts from the feature with the highest
+weight ω of the chosen dataset. On the default dataset that is index 2 (x3 in Excel),
+which reproduces the Excel experiment. The GUI shows the organizer found by the last Run
+as a read-only 0-based index (e.g. `x2`).
 
 Supported majorizing functions:
 

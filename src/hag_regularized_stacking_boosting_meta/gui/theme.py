@@ -84,6 +84,11 @@ QTextEdit:focus {{
     border: 1px solid {t["accent"]};
 }}
 
+/* Read-only statistics (e.g. the organizer found by HAG) */
+QLineEdit:read-only {{
+    background-color: {t["surface_alt"]};
+}}
+
 QComboBox::drop-down {{
     border: none;
     width: 22px;

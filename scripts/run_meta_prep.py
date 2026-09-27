@@ -105,7 +105,6 @@ def main() -> None:
             "cr1": float(cfg.hag.cr1),
             "k1_label": int(cfg.hag.k1_label),
             "k2_label": int(cfg.hag.k2_label),
-            "organizer_index": getattr(cfg.hag, "organizer_index", None),
             "majorizing": {
                 "name": str(cfg.hag.majorizing.name),
                 "params": dict(cfg.hag.majorizing.params or {}),
