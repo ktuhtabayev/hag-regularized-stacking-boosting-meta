@@ -77,7 +77,7 @@ def load_default_config(path: str | Path) -> RunConfig:
     # --------------------------
     # HAGParams
     # --------------------------
-    # organizer_index: missing -> dataclass default (Excel organizer), null -> auto (max weight)
+    # organizer_index: missing or null -> auto (max weight), integer -> forced feature index
     organizer_raw = _get(hag_raw, "organizer_index", HAGParams.organizer_index)
     organizer_index = None if organizer_raw is None else int(organizer_raw)
 

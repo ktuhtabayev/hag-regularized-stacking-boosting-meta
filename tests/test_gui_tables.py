@@ -103,7 +103,7 @@ def test_parameter_controls_initialize_from_config(app) -> None:
     assert window.alpha.value() == pytest.approx(0.3)
     assert window.delta.value() == pytest.approx(0.1)
     assert window.kappa.value() == 15
-    assert window.organizer.value() == 2
+    assert window.organizer.value() == ORGANIZER_AUTO
     assert window.majorizer.currentText() == "sigmoid"
     assert parse_majorizer_params(window.majorizer_params.text()) == {"k": 1.0, "x0": 0.0}
     assert window.dataset_preset.currentText() == "default_csv"
@@ -145,10 +145,19 @@ def test_dataset_preset_dropdown_fills_path_and_tracks_custom_edits(app) -> None
     assert preset_names[0] == "Custom..."
     assert "heart_disease_270_csv" in preset_names
 
+    # a forced organizer index belongs to the previous dataset
+    window.organizer.setValue(2)
     row = preset_names.index("cancer_nominal_dat")
     window.dataset_preset.setCurrentIndex(row)
     window._on_dataset_preset_selected(row)
     assert window.dataset_path.text().endswith("Cancer-N (589, 44, 2).dat")
+    assert window.organizer.value() == ORGANIZER_AUTO
+
+    window.organizer.setValue(2)
+    window._on_dataset_preset_selected(row)  # same dataset again keeps the choice
+    assert window.organizer.value() == 2
+    window._on_dataset_path_edited("")
+    assert window.organizer.value() == ORGANIZER_AUTO
 
     window.dataset_path.setText(str(ROOT / "datasets" / "nonexistent.csv"))
     window._sync_preset_to_path()

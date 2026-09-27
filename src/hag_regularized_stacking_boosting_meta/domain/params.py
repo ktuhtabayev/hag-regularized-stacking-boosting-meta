@@ -32,7 +32,7 @@ class HAGParams:
     k1_label: int = 1
     k2_label: int = 2
 
-    # For Excel-faithful reproduction, organizer is x3 in Excel -> index 2 in code.
-    organizer_index: Optional[int] = 2
+    # None = feature with the highest weight (x3 in Excel -> index 2 on the default dataset).
+    organizer_index: Optional[int] = None
 
     majorizing: MajorizingConfig = field(default_factory=MajorizingConfig)

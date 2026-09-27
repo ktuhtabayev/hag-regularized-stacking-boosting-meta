@@ -57,6 +57,29 @@ def test_default_run_reproduces_the_excel_experiment(default_result) -> None:
 
 
 @pytest.mark.parametrize(
+    ("dataset", "organizer"),
+    [
+        ("datasets/raw/Cancer/Cancer (589, 44, 2).dat", 0),
+        ("datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).csv", 12),
+    ],
+)
+def test_default_organizer_is_the_top_weight_feature_of_the_chosen_dataset(
+    dataset: str, organizer: int
+) -> None:
+    cfg = load_default_config(CONFIG)
+    r = run_pipeline(replace(cfg, dataset=replace(cfg.dataset, path=dataset)), project_root=ROOT)
+    assert r.hag.organizer == organizer == int(np.argmax(r.prep.w_full))
+    assert r.hag.tuplam[0] == organizer
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_diverging_majorizer_fails_with_a_clear_error() -> None:
+    majorizing = replace(_config().hag.majorizing, name="exponential", params={"k": 1.0, "x0": 0.0, "scale": 1.0})
+    with pytest.raises(ValueError, match=r"HAG diverged at step r4"):
+        run_pipeline(_config(majorizing=majorizing), project_root=ROOT)
+
+
+@pytest.mark.parametrize(
     "dataset",
     ["datasets/raw/default.dat", "datasets/raw/Heart-Disease/Heart-Disease (270, 13, 2).csv"],
 )

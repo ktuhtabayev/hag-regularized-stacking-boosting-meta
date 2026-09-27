@@ -100,8 +100,10 @@ configs/default.yaml
 - `seed`: seed of the random new object `Snew`
 - `dataset_catalog`: dataset presets shown in the GUI dropdown
 
-`organizer_index: 2` reproduces the Excel experiment (x3 in Excel is index 2 in
-code). Set it to `null` to use the feature with the highest weight ω.
+`organizer_index: null` (the default) uses the feature with the highest weight ω of
+the chosen dataset; on the default dataset that is index 2 (x3 in Excel), which
+reproduces the Excel experiment. An integer forces that feature index on every dataset.
+The GUI resets the organizer to *Auto* whenever another dataset is chosen.
 
 Supported majorizing functions:
 

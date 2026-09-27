@@ -128,6 +128,14 @@ def greedy_hag_grouping(
             k2_label=int(params.k2_label),
         )
 
+        # Unbounded majorizers (exponential, quadratic) can blow up across iterations
+        if not np.all(np.isfinite(R)):
+            raise ValueError(
+                f"HAG diverged at step r{len(r_step4_history) + 1}: the organizer became "
+                f"non-finite (majorizing function '{params.majorizing.name}' overflowed). "
+                "Lower alpha or the majorizer's parameters, or use a bounded majorizer such as sigmoid."
+            )
+
         # store organizer history (r1, r2, ...) for META + latent build
         r_step4_history.append(R.copy())
 

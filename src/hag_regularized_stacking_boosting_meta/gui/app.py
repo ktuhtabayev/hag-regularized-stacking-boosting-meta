@@ -460,10 +460,17 @@ class MainWindow(QMainWindow):
         entry = self.dataset_catalog.get(preset_name)
         if entry is None:
             return
-        self.dataset_path.setText(str(self.project_root / str(entry["path"])))
+        self._set_dataset_path(str(self.project_root / str(entry["path"])))
 
     def _on_dataset_path_edited(self, _text: str) -> None:
+        self.organizer.setValue(ORGANIZER_AUTO)
         self._sync_preset_to_path()
+
+    def _set_dataset_path(self, path: str) -> None:
+        """A forced organizer index belongs to the previous dataset, so a new one starts at Auto (max ω)."""
+        if path != self.dataset_path.text().strip():
+            self.organizer.setValue(ORGANIZER_AUTO)
+        self.dataset_path.setText(path)
 
     def _sync_preset_to_path(self) -> None:
         """Show the matching preset name for the current path, else Custom."""
@@ -486,7 +493,7 @@ class MainWindow(QMainWindow):
             "Datasets (*.csv *.dat);;All files (*.*)",
         )
         if path:
-            self.dataset_path.setText(str(Path(path)))
+            self._set_dataset_path(str(Path(path)))
             self._sync_preset_to_path()
 
     def _config_from_controls(self) -> RunConfig:
