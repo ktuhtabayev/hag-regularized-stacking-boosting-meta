@@ -186,19 +186,22 @@ def looks_like_csv_extended(path: Path, delimiter: str = ",") -> bool:
       - m,n,c are positive
     """
     try:
-        rows = _read_csv_rows(path, delimiter)
-        if not rows:
+        first = _read_first_csv_row(path, delimiter)
+        if first is None:
             return False
-        first = rows[0]
-        first_three = [x for x in first[:3] if str(x).strip() != ""]
-        if len(first_three) < 3:
-            return False
-        m = int(float(first_three[0]))
-        n = int(float(first_three[1]))
-        c = int(float(first_three[2]))
-        return (m > 0) and (n > 0) and (c > 0)
+        header = _parse_meta_header(first)
+        return header is not None and all(v > 0 for v in header)
     except Exception:
         return False
+
+
+def _parse_meta_header(row: List[str]) -> Optional[Tuple[int, int, int]]:
+    """(m, n, c) from the non-empty cells among the first three of `row`; None if fewer than 3."""
+    first_three = [x for x in row[:3] if str(x).strip() != ""]
+    if len(first_three) < 3:
+        return None
+    m, n, c = (int(float(x)) for x in first_three)
+    return m, n, c
 
 
 # =========================
@@ -367,18 +370,14 @@ def _parse_extended_rows(
 
     # ---- metadata header ----
     if has_metadata_header:
-        header = rows[0]
-        first_three = [x for x in header[:3] if str(x).strip() != ""]
-        if len(first_three) < 3:
-            raise DatasetLoadError(f"Metadata header must contain m,n,c in first row. Got: {rows[0]}")
-
         try:
-            m = int(float(first_three[0]))
-            n = int(float(first_three[1]))
-            c = int(float(first_three[2]))
+            header = _parse_meta_header(rows[0])
         except Exception as e:
             raise DatasetLoadError(f"Failed parsing m,n,c from: {rows[0]}") from e
+        if header is None:
+            raise DatasetLoadError(f"Metadata header must contain m,n,c in first row. Got: {rows[0]}")
 
+        m, n, c = header
         meta = {"m": m, "n": n, "c": c}
         start_idx = 1
 
@@ -478,18 +477,22 @@ def _coerce_label_mapping(mapping: Optional[Dict[Union[str, int], int]]) -> Dict
     return out
 
 
+def _is_blank_row(row: List[str]) -> bool:
+    return not row or all(str(x).strip() == "" for x in row)
+
+
 def _read_csv_rows(path: Path, delimiter: str) -> List[List[str]]:
-    rows: List[List[str]] = []
     try:
         with path.open("r", encoding="utf-8") as f:
-            reader = csv.reader(f, delimiter=delimiter)
-            for row in reader:
-                if not row or all(str(x).strip() == "" for x in row):
-                    continue
-                rows.append(row)
+            return [row for row in csv.reader(f, delimiter=delimiter) if not _is_blank_row(row)]
     except Exception as e:
         raise DatasetLoadError(f"Failed reading CSV: {path}") from e
-    return rows
+
+
+def _read_first_csv_row(path: Path, delimiter: str) -> Optional[List[str]]:
+    """First non-blank CSV row (format detection reads only this, not the whole file)."""
+    with path.open("r", encoding="utf-8") as f:
+        return next((row for row in csv.reader(f, delimiter=delimiter) if not _is_blank_row(row)), None)
 
 
 def read_dat_rows(path: Path) -> List[List[str]]:
@@ -513,16 +516,17 @@ def _dat_token(token: str) -> str:
 
 
 def _rows_to_float_matrix(rows: List[List[str]]) -> np.ndarray:
-    cleaned = [[str(x).strip() for x in row] for row in rows]
-    width = max(len(r) for r in cleaned)
-    padded = [r + [""] * (width - len(r)) for r in cleaned]
+    if not rows:
+        raise DatasetLoadError("No data rows found.")
 
     numeric_rows: List[List[float]] = []
-    for r in padded:
+    for row in rows:
+        r = [str(x).strip() for x in row]
+        # trailing empty cells are padding (e.g. a CSV row shorter than the header row)
         while r and r[-1] == "":
-            r = r[:-1]
+            r.pop()
 
-        if any(x == "" for x in r):
+        if "" in r:
             raise DatasetLoadError(f"Empty cell inside a data row (not allowed): {r}")
 
         try:

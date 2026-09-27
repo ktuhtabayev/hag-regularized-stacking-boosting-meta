@@ -39,9 +39,25 @@ def class_name(label: int, result: PipelineResult) -> str:
     return "0 (undecided)"
 
 
+INTEGRAL_TOLERANCE = 1e-9
+
+
 def _as_number(value: float) -> float | int:
     value = float(value)
-    return int(round(value)) if abs(value - round(value)) < 1e-9 else value
+    return int(round(value)) if abs(value - round(value)) < INTEGRAL_TOLERANCE else value
+
+
+def _as_number_column(values: np.ndarray) -> np.ndarray:
+    """
+    Column-wise _as_number: an int column when every value is integral, else floats
+    with the (near-)integral values snapped to their integer.
+    """
+    values = np.asarray(values, dtype=float)
+    rounded = np.round(values)
+    integral = np.abs(values - rounded) < INTEGRAL_TOLERANCE
+    if integral.all():
+        return rounded.astype(np.int64)
+    return np.where(integral, rounded + 0.0, values)  # + 0.0: an integral -0.0 becomes 0
 
 
 def _object_table(result: PipelineResult, columns: Dict[str, np.ndarray]) -> pd.DataFrame:
@@ -79,7 +95,7 @@ def dataset_frame(result: PipelineResult) -> pd.DataFrame:
     X = result.dataset.X
     return _object_table(
         result,
-        {feature_name(j): [_as_number(v) for v in X[:, j]] for j in range(X.shape[1])},
+        {feature_name(j): _as_number_column(X[:, j]) for j in range(X.shape[1])},
     )
 
 

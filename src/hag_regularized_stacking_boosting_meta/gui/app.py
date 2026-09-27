@@ -146,8 +146,14 @@ class DataFrameTableModel(QAbstractTableModel):
     def __init__(self, frame: pd.DataFrame, *, decimals: int = 6) -> None:
         super().__init__()
         self._source_frame = frame.reset_index(drop=True).copy()
-        self.frame = self._source_frame.copy()
         self.decimals = decimals
+        self._set_frame(self._source_frame.copy())
+
+    def _set_frame(self, frame: pd.DataFrame) -> None:
+        self.frame = frame
+        # One array per column: cells are read without pandas indexing overhead
+        # (Qt asks for every visible cell on each repaint), with the same scalars as .iat
+        self._columns = [frame.iloc[:, j].to_numpy() for j in range(frame.shape[1])]
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
         return 0 if parent.isValid() else len(self.frame)
@@ -159,10 +165,7 @@ class DataFrameTableModel(QAbstractTableModel):
         if not index.isValid():
             return None
         if role == Qt.ItemDataRole.DisplayRole:
-            return _display_value(
-                self.frame.iat[index.row(), index.column()],
-                self.decimals,
-            )
+            return _display_value(self._columns[index.column()][index.row()], self.decimals)
         if role == Qt.ItemDataRole.TextAlignmentRole:
             return Qt.AlignmentFlag.AlignCenter
         return None
@@ -194,7 +197,7 @@ class DataFrameTableModel(QAbstractTableModel):
             return
 
         self.layoutAboutToBeChanged.emit()
-        self.frame = sorted_frame
+        self._set_frame(sorted_frame)
         self.layoutChanged.emit()
 
 

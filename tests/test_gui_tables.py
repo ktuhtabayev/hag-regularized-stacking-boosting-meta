@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QApplication, QHeaderView  # noqa: E402
 
 from hag_regularized_stacking_boosting_meta.gui.app import (  # noqa: E402
     MainWindow,
+    _display_value,
     frame_to_table,
     parse_majorizer_params,
     run_output_dir,
@@ -86,6 +87,34 @@ def test_gui_table_values_are_center_aligned_and_floats_trimmed(app) -> None:
     assert model.data(model.index(1, 1)) == "2"
     alignment = model.data(model.index(0, 0), Qt.ItemDataRole.TextAlignmentRole)
     assert int(alignment) == int(Qt.AlignmentFlag.AlignCenter)
+
+
+def test_gui_table_cells_show_the_frame_values_before_and_after_sorting(app) -> None:
+    frame = pd.DataFrame(
+        {
+            "Object": ["S0", "S1", "S2"],
+            "float": [0.1234567891, float("nan"), -2.0],
+            "int": [3, 1, 2],
+            "mixed": pd.Series([1, 2.5, "a"], dtype=object),
+            "text": ["b", None, "a"],
+        }
+    )
+    table = frame_to_table(frame)
+    model = table.model()
+
+    def shown():
+        return [[model.data(model.index(r, c)) for c in range(model.columnCount())]
+                for r in range(model.rowCount())]
+
+    def expected():
+        return [[_display_value(model.frame.iat[r, c], 6) for c in range(model.columnCount())]
+                for r in range(model.rowCount())]
+
+    assert shown() == expected()
+    assert shown()[0][:3] == ["S0", "0.123457", "3"] and shown()[1][1] == ""
+    table.sortByColumn(2, Qt.SortOrder.AscendingOrder)
+    assert [row[0] for row in shown()] == ["S1", "S2", "S0"]
+    assert shown() == expected()
 
 
 def test_gui_stylesheet_is_built_from_theme_colors() -> None:
