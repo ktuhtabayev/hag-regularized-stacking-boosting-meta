@@ -272,7 +272,8 @@ object margin = ±(d − midpoint)  (+ for K1, − for K2),   ŷ = K1 if d > mid
 configs/        default.yaml (dataset, HAG parameters, dataset catalog)
 datasets/raw/   datasets (CSV and DAT)
 outputs/        generated run outputs (ignored by git)
-resources/      article and Excel experiments with their cheatsheets
+resources/      article/ (PDF, DOCX) and experiments/{hag-algorithm, meta-algorithm,
+                model-evaluation}/ (Excel experiment + cheatsheet/ notes and screenshots)
 scripts/        GUI launcher, stage scripts, dat -> csv converter
 src/            Python package
 tests/          pytest suite
