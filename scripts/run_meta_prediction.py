@@ -22,35 +22,27 @@ import json
 import re
 import subprocess
 import sys
-import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from hag_regularized_stacking_boosting_meta.algorithms.meta import MetaClassifier
+from hag_regularized_stacking_boosting_meta.cli import (
+    latest_run_dir as _latest_run_dir,
+    new_stage_run,
+    parse_stage_args,
+    stage_root,
+)
 from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
+from hag_regularized_stacking_boosting_meta.io.writers import write_json
 
 
 _AI_RE = re.compile(r"^ai(\d+)\b")
 _DI_RE = re.compile(r"^di(\d+)\b")
 
 
-def _make_run_id() -> str:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    suf = uuid.uuid4().hex[:8]
-    return f"{ts}_{suf}"
-
-
-def _ensure_dir(p: Path) -> Path:
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Run META prediction demo with full auto-dependency creation.")
-    p.add_argument("--config", type=str, default="configs/default.yaml")
+def _add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--train-run", type=str, default=None, help="Optional explicit train run folder.")
     p.add_argument("--meta-prep-run", type=str, default=None, help="Optional explicit meta_prep run folder.")
     p.add_argument("--new-object-run", type=str, default=None, help="Optional explicit meta_new_object run folder.")
@@ -59,16 +51,6 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Reuse the latest valid meta_new_object run instead of generating a fresh one.",
     )
-    return p.parse_args()
-
-
-def _latest_run_dir(root: Path) -> Path | None:
-    if not root.exists():
-        return None
-    dirs = [p for p in root.iterdir() if p.is_dir()]
-    if not dirs:
-        return None
-    return sorted(dirs)[-1]
 
 
 def _sorted_cols_by_prefix(headers: List[str], rx: re.Pattern[str]) -> List[int]:
@@ -276,14 +258,14 @@ def _get_or_create_new_object_run(
 
 
 def main() -> None:
-    args = _parse_args()
+    args = parse_stage_args("Run META prediction demo with full auto-dependency creation.", _add_arguments)
     cfg = load_default_config(args.config)
 
     project_root = Path(__file__).resolve().parent.parent
 
-    train_root = Path(cfg.output.root_dir) / cfg.output.runs_dir / "train"
-    meta_root = Path(cfg.output.root_dir) / cfg.output.runs_dir / "meta_prep"
-    meta_new_root = Path(cfg.output.root_dir) / cfg.output.runs_dir / "meta_new_object"
+    train_root = stage_root(cfg, "train")
+    meta_root = stage_root(cfg, "meta_prep")
+    meta_new_root = stage_root(cfg, "meta_new_object")
 
     # -----------------------------
     # 1) Load or auto-create every needed stage
@@ -364,8 +346,7 @@ def main() -> None:
     # -----------------------------
     # 4) Save GUI-friendly predict artifacts
     # -----------------------------
-    predict_root = Path(cfg.output.root_dir) / cfg.output.runs_dir / "predict"
-    predict_run_dir = _ensure_dir(predict_root / _make_run_id())
+    predict_run_dir = new_stage_run(cfg, "predict").run_dir
 
     artifacts_ref = {
         "train_run_dir": str(train_run_dir),
@@ -376,10 +357,7 @@ def main() -> None:
         "snew_binary_csv": str(meta_new_run_dir / "snew_binary.csv"),
         "reuse_new_object": bool(args.reuse_new_object),
     }
-    (predict_run_dir / "artifacts_ref.json").write_text(
-        json.dumps(artifacts_ref, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    write_json(predict_run_dir / "artifacts_ref.json", artifacts_ref)
 
     debug_steps: List[Dict[str, Any]] = []
     if res.debug is not None:
@@ -408,19 +386,13 @@ def main() -> None:
             "k2_size": int(d.k2_size),
         },
     }
-    (predict_run_dir / "meta_debug.json").write_text(
-        json.dumps(meta_debug, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    write_json(predict_run_dir / "meta_debug.json", meta_debug)
 
     prediction_payload = {
         "predicted_label": int(d.predicted_label),
         "a_new_binary": [int(x) for x in a_new.tolist()],
     }
-    (predict_run_dir / "prediction.json").write_text(
-        json.dumps(prediction_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    write_json(predict_run_dir / "prediction.json", prediction_payload)
 
     print("\nSaved predict artifacts:")
     print("Predict run folder:", predict_run_dir)

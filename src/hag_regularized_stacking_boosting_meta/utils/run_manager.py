@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import uuid
+
+
+# <YYYYMMDD_HHMMSS>_<8 hex>; group 1 is the creation second
+RUN_ID_PATTERN = re.compile(r"^(\d{8}_\d{6})_[0-9a-f]{8}$")
 
 
 def new_run_id() -> str:

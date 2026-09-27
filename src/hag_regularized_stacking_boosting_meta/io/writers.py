@@ -38,35 +38,6 @@ def write_text(path: str | Path, text: str) -> Path:
     return path
 
 
-def write_csv_matrix(
-    path: str | Path,
-    X: np.ndarray,
-    y: np.ndarray | None = None,
-    delimiter: str = ",",
-    header: list[str] | None = None,
-) -> Path:
-    """
-    Writes numeric matrix to CSV.
-    If y is provided, appends y as last column.
-    """
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    X = np.asarray(X)
-    if y is not None:
-        y = np.asarray(y).reshape(-1, 1)
-        out = np.concatenate([X, y], axis=1)
-    else:
-        out = X
-
-    with path.open("w", encoding="utf-8", newline="") as f:
-        if header:
-            f.write(delimiter.join(header) + "\n")
-        for row in out:
-            f.write(delimiter.join(str(v) for v in row) + "\n")
-    return path
-
-
 GUI_RUNS_TASK = "gui"
 
 

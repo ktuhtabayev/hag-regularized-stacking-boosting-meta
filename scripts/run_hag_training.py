@@ -1,49 +1,29 @@
 from __future__ import annotations
 
-import json
-import uuid
-from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict
 
-import numpy as np
-
-from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
-from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
-from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
 from hag_regularized_stacking_boosting_meta.algorithms.hag.greedy_grouping import (
     greedy_hag_grouping,
 )
-
-
-def _make_run_id() -> str:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    suf = uuid.uuid4().hex[:8]
-    return f"{ts}_{suf}"
-
-
-def _ensure_dir(p: Path) -> Path:
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _save_csv_float(path: Path, data: np.ndarray, header: str) -> None:
-    np.savetxt(path, data.astype(float), delimiter=",", header=header, comments="", fmt="%.9f")
-
-
-def _jsonable_dataset_config(cfg_dataset: Any) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {}
-    for k, v in vars(cfg_dataset).items():
-        payload[k] = str(v) if isinstance(v, Path) else v
-    return payload
+from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
+from hag_regularized_stacking_boosting_meta.cli import (
+    hag_run_config_payload,
+    load_stage_inputs,
+    new_stage_run,
+    parse_stage_args,
+    write_dataset_snapshot,
+    write_dij_csv,
+)
+from hag_regularized_stacking_boosting_meta.io.writers import write_json
 
 
 def main() -> None:
+    args = parse_stage_args("HAG training (Algorithm-1): TUPLAM and latent features dij.")
+
     # ============================================================
     # 1) Load config + dataset
     # ============================================================
-    cfg = load_default_config("configs/default.yaml")
-    ds = load_dataset_bundle(cfg.dataset)
+    cfg, ds = load_stage_inputs(args.config)
 
     # ============================================================
     # 2) Prep merged contributions + merged weights (aligned to original indices)
@@ -52,69 +32,40 @@ def main() -> None:
         X=ds.X,
         y=ds.y,
         feature_types=ds.feature_types,
-        quantitative_idx=getattr(ds, "quantitative_idx", None),
-        nominal_idx=getattr(ds, "nominal_idx", None),
+        quantitative_idx=ds.quantitative_idx,
+        nominal_idx=ds.nominal_idx,
     )
 
     # ============================================================
-    # 3) Run Algorithm-1 (HAG greedy grouping)
+    # 3) Run Algorithm-1 (HAG greedy grouping); prints the Excel Step-3 columns
     # IMPORTANT: X must already be η-contribution-values dataset
     # ============================================================
     res = greedy_hag_grouping(
         X=prep.X_contrib_full,
         y=ds.y,
         weights=prep.w_full,
-        params=cfg.hag,   # NEW: use domain.params.HAGParams from YAML (includes majorizing.name+params)
+        params=cfg.hag,  # domain.params.HAGParams from YAML (includes majorizing.name+params)
     )
 
     # ============================================================
-    # 4) Prepare run folder
-    # outputs/runs/train/<run_id>/
+    # 4) Run folder outputs/runs/train/<run_id>/ + reproducibility snapshot
     # ============================================================
-    run_name = "train"
-    run_id = _make_run_id()
-    run_dir = _ensure_dir(Path(cfg.output.root_dir) / cfg.output.runs_dir / run_name / run_id)
+    run = new_stage_run(cfg, "train")
+    run_dir = run.run_dir
+
+    dataset_path_txt, dataset_cfg_json = write_dataset_snapshot(run_dir, cfg)
+    # HAG config including majorizing.name + majorizing.params
+    run_cfg_json = write_json(run_dir / "run_config.json", hag_run_config_payload(cfg))
 
     # ============================================================
-    # 5) Reproducibility snapshot (same policy)
-    # ============================================================
-    dataset_path_txt = run_dir / "dataset_path.txt"
-    dataset_cfg_json = run_dir / "dataset_config.json"
-    run_cfg_json = run_dir / "run_config.json"
-
-    dataset_path_txt.write_text(str(cfg.dataset.path), encoding="utf-8")
-    dataset_cfg_json.write_text(
-        json.dumps(_jsonable_dataset_config(cfg.dataset), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-    # NEW: write HAG config including majorizing.name + majorizing.params
-    run_cfg_payload: Dict[str, Any] = {
-        "seed": int(cfg.seed),
-        "hag": {
-            "alpha": float(cfg.hag.alpha),
-            "delta": float(cfg.hag.delta),
-            "kappa": int(cfg.hag.kappa),
-            "cr1": float(cfg.hag.cr1),
-            "k1_label": int(cfg.hag.k1_label),
-            "k2_label": int(cfg.hag.k2_label),
-            "majorizing": {
-                "name": str(cfg.hag.majorizing.name),
-                "params": dict(cfg.hag.majorizing.params or {}),
-            },
-        },
-    }
-    run_cfg_json.write_text(json.dumps(run_cfg_payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    # ============================================================
-    # 6) Artifacts: tuplam.json + dij.csv
+    # 5) Artifacts: tuplam.json + dij.csv
     # ============================================================
     tuplam_path = run_dir / "tuplam.json"
     dij_path = run_dir / "dij.csv"
 
     tuplam_payload: Dict[str, Any] = {
-        "run_name": run_name,
-        "run_id": run_id,
+        "run_name": run.task,
+        "run_id": run.run_id,
         "run_dir": str(run_dir.as_posix()),
         "tuplam": res.tuplam,                 # 0-based feature indices (selection order)
         "size": len(res.tuplam),
@@ -127,17 +78,13 @@ def main() -> None:
             "dij_csv": str(dij_path.as_posix()),
         },
     }
-    tuplam_path.write_text(json.dumps(tuplam_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_json(tuplam_path, tuplam_payload)
 
     # dij.csv (latent feature matrix), columns: r1..rp
-    if res.dij.size == 0:
-        dij_path.write_text("r1\n", encoding="utf-8")
-    else:
-        header = ",".join([f"r{i+1}" for i in range(res.dij.shape[1])])
-        _save_csv_float(dij_path, res.dij, header=header)
+    write_dij_csv(dij_path, res.dij)
 
     # ============================================================
-    # 7) Console summary
+    # 6) Console summary
     # ============================================================
     print("HAG train demo completed")
     print("Run folder:", run_dir)

@@ -1,71 +1,45 @@
 from __future__ import annotations
 
-import json
-import uuid
-from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict
 
-import numpy as np
-
-from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
-from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
 from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
+from hag_regularized_stacking_boosting_meta.cli import (
+    dataset_name,
+    load_stage_inputs,
+    new_stage_run,
+    parse_stage_args,
+    save_csv,
+    write_dataset_snapshot,
+)
+from hag_regularized_stacking_boosting_meta.io.writers import write_json
 
 
-def _make_run_id() -> str:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    suf = uuid.uuid4().hex[:8]
-    return f"{ts}_{suf}"
-
-
-def _ensure_dir(p: Path) -> Path:
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _save_csv_float(path: Path, data: np.ndarray, header: str) -> None:
-    np.savetxt(path, data.astype(float), delimiter=",", header=header, comments="", fmt="%.9f")
-
-
-def _jsonable_dataset_config(cfg_dataset: Any) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {}
-    for k, v in vars(cfg_dataset).items():
-        payload[k] = str(v) if isinstance(v, Path) else v
-    return payload
+def _print_banner(dataset_path: str) -> None:
+    print("============================================================")
+    print("HAG PREP DEMO")
+    print("============================================================")
+    print(f"Dataset path: {dataset_path}")
 
 
 def main() -> None:
-    cfg = load_default_config("configs/default.yaml")
-    ds = load_dataset_bundle(cfg.dataset)
-
-    quantitative_idx = np.asarray(getattr(ds, "quantitative_idx", []), dtype=int)
-    nominal_idx = np.asarray(getattr(ds, "nominal_idx", []), dtype=int)
+    args = parse_stage_args("HAG preparation: merged contribution table and weight ranking.")
+    cfg, ds = load_stage_inputs(args.config)
 
     # ------------------------------------------------------------
     # Graceful messages instead of hard failure when one stage is absent
     # ------------------------------------------------------------
-    if quantitative_idx.size == 0:
-        print("============================================================")
-        print("HAG PREP DEMO")
-        print("============================================================")
-        print(f"Dataset path: {cfg.dataset.path}")
+    if not ds.quantitative_idx:
+        _print_banner(cfg.dataset.path)
         print("Note: no quantitative features found (feature_types = 1).")
         print("Quantitative stage will be skipped in the merge/prep step.")
 
-    if nominal_idx.size == 0:
-        print("============================================================")
-        print("HAG PREP DEMO")
-        print("============================================================")
-        print(f"Dataset path: {cfg.dataset.path}")
+    if not ds.nominal_idx:
+        _print_banner(cfg.dataset.path)
         print("Note: no nominal features found (feature_types = 0).")
         print("Nominal stage will be skipped in the merge/prep step.")
 
-    if quantitative_idx.size == 0 and nominal_idx.size == 0:
-        print("============================================================")
-        print("HAG PREP DEMO")
-        print("============================================================")
-        print(f"Dataset path: {cfg.dataset.path}")
+    if not ds.quantitative_idx and not ds.nominal_idx:
+        _print_banner(cfg.dataset.path)
         print("HAG prep skipped.")
         print("Reason: no quantitative and no nominal features were found.")
         print("Check your dataset feature-sign row:")
@@ -78,23 +52,14 @@ def main() -> None:
         X=ds.X,
         y=ds.y,
         feature_types=ds.feature_types,  # 0/1 signs row (0=nominal,1=quant)
-        quantitative_idx=getattr(ds, "quantitative_idx", None),
-        nominal_idx=getattr(ds, "nominal_idx", None),
+        quantitative_idx=ds.quantitative_idx,
+        nominal_idx=ds.nominal_idx,
     )
 
-    # outputs/runs/hag_prep/<run_id>/
-    run_name = "hag_prep"
-    run_id = _make_run_id()
-    run_dir = _ensure_dir(Path("outputs") / "runs" / run_name / run_id)
-
-    # reproducibility snapshot (same policy as other demos)
-    dataset_path_txt = run_dir / "dataset_path.txt"
-    dataset_cfg_json = run_dir / "dataset_config.json"
-    dataset_path_txt.write_text(str(cfg.dataset.path), encoding="utf-8")
-    dataset_cfg_json.write_text(
-        json.dumps(_jsonable_dataset_config(cfg.dataset), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    # outputs/runs/hag_prep/<run_id>/ + reproducibility snapshot (same policy as other stages)
+    run = new_stage_run(cfg, "hag_prep")
+    run_dir = run.run_dir
+    dataset_path_txt, dataset_cfg_json = write_dataset_snapshot(run_dir, cfg)
 
     # requested artifacts
     merged_contrib_path = run_dir / "merged_contrib.csv"
@@ -102,23 +67,23 @@ def main() -> None:
     weight_rank_path = run_dir / "weight_rank.json"
 
     n = prep.X_contrib_full.shape[1]
-    header = ",".join([f"f_{i}" for i in range(n)])  # f_0 aligns to x1, f_1 to x2, ...
-    _save_csv_float(merged_contrib_path, prep.X_contrib_full, header=header)
+    header = ",".join(f"f_{i}" for i in range(n))  # f_0 aligns to x1, f_1 to x2, ...
+    save_csv(merged_contrib_path, prep.X_contrib_full.astype(float), header)
 
     # weights.json
     weights_payload: Dict[str, Any] = {
-        "run_name": run_name,
-        "run_id": run_id,
+        "run_name": run.task,
+        "run_id": run.run_id,
         "run_dir": str(run_dir.as_posix()),
         "dataset": {
-            "name": getattr(ds, "name", None),
+            "name": dataset_name(cfg.dataset),
             "path": str(cfg.dataset.path),
             "shape_X": list(ds.X.shape),
             "shape_y": list(ds.y.shape),
             "classes": sorted(set(ds.y.tolist())),
             "feature_types": ds.feature_types.tolist(),
-            "quantitative_idx": getattr(ds, "quantitative_idx", []),
-            "nominal_idx": getattr(ds, "nominal_idx", []),
+            "quantitative_idx": ds.quantitative_idx,
+            "nominal_idx": ds.nominal_idx,
         },
         "weights": {
             "w_full": prep.w_full.tolist(),  # length n; aligned to original feature positions
@@ -132,27 +97,26 @@ def main() -> None:
             "weight_rank_json": str(weight_rank_path.as_posix()),
         },
     }
-    weights_path.write_text(json.dumps(weights_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_json(weights_path, weights_payload)
 
-    # weight_rank.json (robust to naming differences)
-    sorted_idx = getattr(prep, "weight_sorted_feature_idx", getattr(prep, "weight_sorted_idx"))
-    rank = getattr(prep, "weight_rank_per_feature", getattr(prep, "weight_rank_per_feature_index"))
-
+    # weight_rank.json
+    sorted_idx = prep.weight_sorted_feature_idx
+    rank = prep.weight_rank_per_feature
     sorted_table = [
         {"rank": int(pos), "feature_index": int(fi), "weight": float(prep.w_full[fi])}
         for pos, fi in enumerate(sorted_idx)
     ]
 
     weight_rank_payload: Dict[str, Any] = {
-        "run_name": run_name,
-        "run_id": run_id,
+        "run_name": run.task,
+        "run_id": run.run_id,
         "ranking_rule": "primary: weight desc; tie: smaller feature_index first (left-to-right)",
         "sorted_feature_indices": sorted_idx,
         "rank_per_feature_index": rank,
         "sorted_table": sorted_table,  # easiest to compare with Excel
         "top_20": sorted_table[:20],
     }
-    weight_rank_path.write_text(json.dumps(weight_rank_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_json(weight_rank_path, weight_rank_payload)
 
     # Console print (clear + matches Excel logic)
     print("HAG prep demo completed")

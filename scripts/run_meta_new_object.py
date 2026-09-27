@@ -2,49 +2,29 @@ from __future__ import annotations
 
 import argparse
 import json
-import uuid
 from dataclasses import dataclass, replace
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
-
-from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
-from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
-from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
 from hag_regularized_stacking_boosting_meta.algorithms.hag.greedy_grouping import greedy_hag_grouping
+from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
 from hag_regularized_stacking_boosting_meta.algorithms.meta.new_object import (
     form_meta_new_object,
     format_snew,
 )
+from hag_regularized_stacking_boosting_meta.cli import (
+    latest_run_dir,
+    new_stage_run,
+    parse_stage_args,
+    save_csv,
+    stage_root,
+)
+from hag_regularized_stacking_boosting_meta.io.configs import RunConfig, load_default_config
+from hag_regularized_stacking_boosting_meta.io.loaders import LoadedDataset, load_dataset_bundle
+from hag_regularized_stacking_boosting_meta.io.writers import write_json, write_text
 
 
-# -----------------------------
-# Helpers
-# -----------------------------
-
-def _make_run_id() -> str:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    suf = uuid.uuid4().hex[:8]
-    return f"{ts}_{suf}"
-
-
-def _ensure_dir(p: Path) -> Path:
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description="Create META new object Snew=(a0..ap) in initial + binary formats."
-    )
-    p.add_argument(
-        "--config",
-        type=str,
-        default="configs/default.yaml",
-        help="YAML config path (default: configs/default.yaml).",
-    )
+def _add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--dataset-path",
         type=str,
@@ -54,8 +34,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--seed",
         type=int,
-        default=20260222,
-        help="Random seed for reproducible Snew (default: 20260222).",
+        default=None,
+        help="Random seed for a reproducible Snew (default: a fresh random Snew on every run).",
     )
     p.add_argument(
         "--run-folder",
@@ -67,7 +47,6 @@ def _parse_args() -> argparse.Namespace:
             "or runs HAG if none exist."
         ),
     )
-    return p.parse_args()
 
 
 def _load_tuplam_from_run_folder(run_dir: Path) -> List[int]:
@@ -94,22 +73,6 @@ def _is_valid_train_run(run_dir: Path) -> bool:
     return (run_dir / "tuplam.json").exists()
 
 
-def _find_latest_train_run(train_root: Path) -> Optional[Path]:
-    if not train_root.exists():
-        return None
-
-    candidates = [p for p in train_root.iterdir() if p.is_dir() and _is_valid_train_run(p)]
-    if not candidates:
-        return None
-
-    candidates_sorted = sorted(
-        candidates,
-        key=lambda p: (p.name, p.stat().st_mtime),
-        reverse=True,
-    )
-    return candidates_sorted[0]
-
-
 @dataclass(frozen=True)
 class TuplamSource:
     tuplam: List[int]
@@ -119,8 +82,8 @@ class TuplamSource:
 
 def _get_tuplam_auto(
     *,
-    cfg,
-    ds,
+    cfg: RunConfig,
+    ds: LoadedDataset,
     explicit_run_folder: Optional[str],
 ) -> TuplamSource:
     # 1) Explicit run folder
@@ -136,8 +99,7 @@ def _get_tuplam_auto(
         )
 
     # 2) Auto-detect latest train run
-    train_root = Path("outputs") / "runs" / "train"
-    latest = _find_latest_train_run(train_root)
+    latest = latest_run_dir(stage_root(cfg, "train"), _is_valid_train_run)
     if latest is not None:
         tuplam = _load_tuplam_from_run_folder(latest)
         return TuplamSource(
@@ -151,8 +113,8 @@ def _get_tuplam_auto(
         X=ds.X,
         y=ds.y,
         feature_types=ds.feature_types,
-        quantitative_idx=getattr(ds, "quantitative_idx", None),
-        nominal_idx=getattr(ds, "nominal_idx", None),
+        quantitative_idx=ds.quantitative_idx,
+        nominal_idx=ds.nominal_idx,
     )
     hag_res = greedy_hag_grouping(
         X=prep.X_contrib_full,
@@ -167,27 +129,21 @@ def _get_tuplam_auto(
     )
 
 
-def _dataset_cfg_with_path(dataset_cfg: Any, dataset_path: Path):
-    """Return a copy of frozen/unfrozen dataset config with updated path."""
-    return replace(dataset_cfg, path=Path(dataset_path))
+def _load_dataset(cfg: RunConfig, dataset_path: Path) -> LoadedDataset:
+    return load_dataset_bundle(replace(cfg.dataset, path=str(dataset_path)))
 
 
 def main() -> None:
-    args = _parse_args()
+    args = parse_stage_args(
+        "Create META new object Snew=(a0..ap) in initial + binary formats.", _add_arguments
+    )
 
     # 1) Load config
     cfg = load_default_config(args.config)
 
-    # Decide effective dataset path WITHOUT mutating frozen config
-    effective_dataset_path = Path(cfg.dataset.path)
-
-    # Optional explicit dataset override wins first
-    if args.dataset_path:
-        effective_dataset_path = Path(args.dataset_path)
-
-    # First load using current effective path
-    dataset_cfg = _dataset_cfg_with_path(cfg.dataset, effective_dataset_path)
-    ds = load_dataset_bundle(dataset_cfg)
+    # Effective dataset path: an explicit --dataset-path wins over the YAML path
+    effective_dataset_path = Path(args.dataset_path or cfg.dataset.path)
+    ds = _load_dataset(cfg, effective_dataset_path)
 
     # 2) Obtain tuplam (auto reuse or auto run)
     tuplam_src = _get_tuplam_auto(cfg=cfg, ds=ds, explicit_run_folder=args.run_folder)
@@ -197,8 +153,7 @@ def main() -> None:
         run_ds_path = _load_dataset_path_from_run_folder(tuplam_src.train_run_dir)
         if run_ds_path is not None:
             effective_dataset_path = run_ds_path
-            dataset_cfg = _dataset_cfg_with_path(cfg.dataset, effective_dataset_path)
-            ds = load_dataset_bundle(dataset_cfg)
+            ds = _load_dataset(cfg, effective_dataset_path)
 
     # 3) Form Snew
     obj = form_meta_new_object(
@@ -206,7 +161,7 @@ def main() -> None:
         y=ds.y,
         feature_types=ds.feature_types,
         tuplam=tuplam_src.tuplam,
-        # seed=args.seed,
+        seed=args.seed,
     )
 
     print("\n==============================")
@@ -224,17 +179,17 @@ def main() -> None:
     print(format_snew(obj.a_headers, obj.a_bin))
 
     # 4) Save for GUI / reuse
-    out_dir = _ensure_dir(Path("outputs") / "runs" / "meta_new_object" / _make_run_id())
-    (out_dir / "source.txt").write_text(tuplam_src.source, encoding="utf-8")
-    (out_dir / "config_path.txt").write_text(str(Path(args.config)), encoding="utf-8")
-    (out_dir / "dataset_path.txt").write_text(str(effective_dataset_path), encoding="utf-8")
+    out_dir = new_stage_run(cfg, "meta_new_object").run_dir
+    write_text(out_dir / "source.txt", tuplam_src.source)
+    write_text(out_dir / "config_path.txt", str(Path(args.config)))
+    write_text(out_dir / "dataset_path.txt", str(effective_dataset_path))
     if tuplam_src.train_run_dir is not None:
-        (out_dir / "train_run_dir.txt").write_text(str(tuplam_src.train_run_dir), encoding="utf-8")
+        write_text(out_dir / "train_run_dir.txt", str(tuplam_src.train_run_dir))
 
-    (out_dir / "tuplam.txt").write_text(str(obj.tuplam), encoding="utf-8")
-    (out_dir / "snew_headers.txt").write_text(",".join(obj.a_headers), encoding="utf-8")
-    np.savetxt(out_dir / "snew_init.csv", obj.a_init.reshape(1, -1), delimiter=",", fmt="%.9f")
-    np.savetxt(out_dir / "snew_binary.csv", obj.a_bin.reshape(1, -1), delimiter=",", fmt="%.9f")
+    write_text(out_dir / "tuplam.txt", str(obj.tuplam))
+    write_text(out_dir / "snew_headers.txt", ",".join(obj.a_headers))
+    save_csv(out_dir / "snew_init.csv", obj.a_init.reshape(1, -1), header="")
+    save_csv(out_dir / "snew_binary.csv", obj.a_bin.reshape(1, -1), header="")
 
     # JSON for GUI / future animation / visualization
     payload: Dict[str, Any] = {
@@ -248,7 +203,7 @@ def main() -> None:
         "snew_binary": [int(round(float(x))) for x in obj.a_bin.tolist()],
         "gamma_map": {str(k): float(v) for k, v in obj.gamma_map.items()},
     }
-    (out_dir / "snew.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_json(out_dir / "snew.json", payload)
 
     print("\nSaved:")
     print("Run folder:", out_dir)

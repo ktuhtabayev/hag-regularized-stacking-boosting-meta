@@ -1,29 +1,23 @@
 from __future__ import annotations
 
-import json
-import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
 
-from hag_regularized_stacking_boosting_meta.io.configs import load_default_config
-from hag_regularized_stacking_boosting_meta.io.loaders import load_dataset_bundle
-from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
 from hag_regularized_stacking_boosting_meta.algorithms.hag.greedy_grouping import greedy_hag_grouping
+from hag_regularized_stacking_boosting_meta.algorithms.hag.input_preparation import prepare_hag_inputs
 from hag_regularized_stacking_boosting_meta.algorithms.meta.training_set import prepare_meta_training_dataset
-
-
-def _make_run_id() -> str:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    suf = uuid.uuid4().hex[:8]
-    return f"{ts}_{suf}"
-
-
-def _ensure_dir(p: Path) -> Path:
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+from hag_regularized_stacking_boosting_meta.cli import (
+    hag_run_config_payload,
+    load_stage_inputs,
+    new_stage_run,
+    parse_stage_args,
+    save_csv,
+    write_dataset_snapshot,
+    write_dij_csv,
+)
+from hag_regularized_stacking_boosting_meta.io.writers import write_json
 
 
 def _save_csv_meta(path: Path, headers: list[str], S: np.ndarray, y: np.ndarray) -> None:
@@ -33,31 +27,22 @@ def _save_csv_meta(path: Path, headers: list[str], S: np.ndarray, y: np.ndarray)
     """
     S = np.asarray(S, dtype=float)
     y = np.asarray(y, dtype=int).reshape(-1, 1)
-    out = np.hstack([S, y.astype(float)])
-
-    header = ",".join(headers)
-    np.savetxt(path, out, delimiter=",", header=header, comments="", fmt="%.9f")
-
-
-def _jsonable_dataset_config(cfg_dataset: Any) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {}
-    for k, v in vars(cfg_dataset).items():
-        payload[k] = str(v) if isinstance(v, Path) else v
-    return payload
+    save_csv(path, np.hstack([S, y.astype(float)]), ",".join(headers))
 
 
 def main() -> None:
+    args = parse_stage_args("META preparation: training set (ai*, di*, Class) from a fresh HAG run.")
+
     # 1) Load config + dataset
-    cfg = load_default_config("configs/default.yaml")
-    ds = load_dataset_bundle(cfg.dataset)
+    cfg, ds = load_stage_inputs(args.config)
 
     # 2) Run HAG prep -> contributions + weights (for organizer only)
     prep = prepare_hag_inputs(
         X=ds.X,
         y=ds.y,
         feature_types=ds.feature_types,
-        quantitative_idx=getattr(ds, "quantitative_idx", None),
-        nominal_idx=getattr(ds, "nominal_idx", None),
+        quantitative_idx=ds.quantitative_idx,
+        nominal_idx=ds.nominal_idx,
     )
 
     # 3) Run HAG (Algorithm-1)
@@ -82,62 +67,28 @@ def main() -> None:
     )
 
     # 5) Save outputs
-    run_name = "meta_prep"
-    run_id = _make_run_id()
-    run_dir = _ensure_dir(Path("outputs") / "runs" / run_name / run_id)
+    run = new_stage_run(cfg, "meta_prep")
+    run_dir = run.run_dir
 
-    dataset_path_txt = run_dir / "dataset_path.txt"
-    dataset_cfg_json = run_dir / "dataset_config.json"
-    run_cfg_json = run_dir / "run_config.json"
-
-    dataset_path_txt.write_text(str(cfg.dataset.path), encoding="utf-8")
-    dataset_cfg_json.write_text(
-        json.dumps(_jsonable_dataset_config(cfg.dataset), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-    run_cfg_payload: Dict[str, Any] = {
-        "seed": int(cfg.seed),
-        "hag": {
-            "alpha": float(cfg.hag.alpha),
-            "delta": float(cfg.hag.delta),
-            "kappa": int(cfg.hag.kappa),
-            "cr1": float(cfg.hag.cr1),
-            "k1_label": int(cfg.hag.k1_label),
-            "k2_label": int(cfg.hag.k2_label),
-            "majorizing": {
-                "name": str(cfg.hag.majorizing.name),
-                "params": dict(cfg.hag.majorizing.params or {}),
-            },
-        },
-    }
-    run_cfg_json.write_text(json.dumps(run_cfg_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_dataset_snapshot(run_dir, cfg)
+    write_json(run_dir / "run_config.json", hag_run_config_payload(cfg))
 
     # Artifacts
     tuplam_path = run_dir / "tuplam.json"
     dij_path = run_dir / "dij.csv"
     meta_train_path = run_dir / "meta_train.csv"
 
-    # Save tuplam.json
     tuplam_payload: Dict[str, Any] = {
-        "run_name": run_name,
-        "run_id": run_id,
+        "run_name": run.task,
+        "run_id": run.run_id,
         "run_dir": str(run_dir.as_posix()),
         "tuplam": hag_res.tuplam,              # 0-based ordered
         "size": len(hag_res.tuplam),
         "p_latent": hag_res.p,
         "crit_history": hag_res.crit_history,
     }
-    tuplam_path.write_text(json.dumps(tuplam_payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    # Save dij.csv
-    if hag_res.dij.size == 0:
-        dij_path.write_text("r1\n", encoding="utf-8")
-    else:
-        header = ",".join([f"r{i+1}" for i in range(hag_res.dij.shape[1])])
-        np.savetxt(dij_path, hag_res.dij.astype(float), delimiter=",", header=header, comments="", fmt="%.9f")
-
-    # Save meta_train.csv
+    write_json(tuplam_path, tuplam_payload)
+    write_dij_csv(dij_path, hag_res.dij)
     _save_csv_meta(meta_train_path, meta.headers, meta.S, meta.y)
 
     # Console summary
