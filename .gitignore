@@ -79,7 +79,6 @@ tmp/
 # =========================
 # Local configuration
 # =========================
-configs/gui_last_used.yaml
 .env
 .env.*
 *.local
